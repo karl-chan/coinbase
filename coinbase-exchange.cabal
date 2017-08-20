@@ -19,15 +19,13 @@ library
 
     exposed-modules:    Coinbase.Exchange.MarketData
                     ,   Coinbase.Exchange.Private
+                    ,   Coinbase.Exchange.Rest
                     ,   Coinbase.Exchange.Socket
                     ,   Coinbase.Exchange.Types.Core
                     ,   Coinbase.Exchange.Types.MarketData
                     ,   Coinbase.Exchange.Types.Private
                     ,   Coinbase.Exchange.Types.Socket
                     ,   Coinbase.Exchange.Types
-
-    other-modules:      Coinbase.Exchange.Rest
-
     build-depends:      base
                     ,   mtl
                     ,   resourcet

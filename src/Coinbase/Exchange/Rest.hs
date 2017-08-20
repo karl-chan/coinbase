@@ -7,6 +7,7 @@ module Coinbase.Exchange.Rest
     , coinbasePost
     , coinbaseDelete
     , coinbaseDeleteDiscardBody
+    , coinbaseRequest
     , realCoinbaseGet
     , realCoinbasePost
     , voidBody
