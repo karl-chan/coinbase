@@ -42,7 +42,6 @@ library
                     ,   time
                     ,   scientific
                     ,   uuid
-                    ,   uuid-aeson
                     ,   vector
                     ,   hashable
                     ,   deepseq

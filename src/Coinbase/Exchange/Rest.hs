@@ -11,6 +11,7 @@ module Coinbase.Exchange.Rest
     , realCoinbaseGet
     , realCoinbasePost
     , voidBody
+    , processResponse
     ) where
 
 import           Control.Monad.Except
