@@ -40,6 +40,12 @@ newtype Cost = Cost { unCost :: CoinScientific }
 newtype OrderId = OrderId { unOrderId :: UUID }
     deriving (Eq, Ord, Show, Read, Data, Typeable, Generic, NFData, Hashable, FromJSON, ToJSON)
 
+newtype UserId = UserId { unUserId :: UUID }
+    deriving (Eq, Ord, Show, Read, Data, Typeable, Generic, NFData, Hashable, FromJSON, ToJSON)
+
+newtype ProfileId = ProfileId { unProfileId :: UUID }
+    deriving (Eq, Ord, Show, Read, Data, Typeable, Generic, NFData, Hashable, FromJSON, ToJSON)
+
 newtype Aggregate = Aggregate { unAggregate :: Int64 }
     deriving (Eq, Ord, Show, Read, Num, Data, Typeable, Generic, NFData, Hashable, FromJSON, ToJSON)
 

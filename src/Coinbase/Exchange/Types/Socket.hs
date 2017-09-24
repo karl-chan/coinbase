@@ -55,6 +55,8 @@ data ExchangeMessage
         --
         , msgPrice     :: Price
         , msgSize      :: Size
+        , msgUserId    :: Maybe UserId
+        , msgProfileId :: Maybe ProfileId
         }
     | ReceivedMarket
         { msgTime         :: UTCTime
@@ -65,6 +67,8 @@ data ExchangeMessage
         , msgClientOid    :: Maybe ClientOrderId
         -- market orders have no price and are bounded by either size, funds or both
         , msgMarketBounds :: (Either Size (Maybe Size, Cost))
+        , msgUserId       :: Maybe UserId
+        , msgProfileId    :: Maybe ProfileId
         }
     | Open
         { msgTime          :: UTCTime
@@ -74,6 +78,8 @@ data ExchangeMessage
         , msgSide          :: Side
         , msgRemainingSize :: Size
         , msgPrice         :: Price
+        , msgUserId        :: Maybe UserId
+        , msgProfileId     :: Maybe ProfileId
         }
     | Match
         { msgTime         :: UTCTime
@@ -85,6 +91,8 @@ data ExchangeMessage
         , msgTakerOrderId :: OrderId
         , msgSize         :: Size
         , msgPrice        :: Price
+        , msgUserId       :: Maybe UserId
+        , msgProfileId    :: Maybe ProfileId
         }
     | Done
         { msgTime         :: UTCTime
@@ -100,6 +108,8 @@ data ExchangeMessage
         -- This appears to be bug at GDAX. I've told them about it.
         , msgMaybePrice   :: Maybe Price
         , msgMaybeRemSize :: Maybe Size
+        , msgUserId       :: Maybe UserId
+        , msgProfileId    :: Maybe ProfileId
         }
     | ChangeLimit
         { msgTime       :: UTCTime
@@ -113,6 +123,8 @@ data ExchangeMessage
         , msgMaybePrice :: Maybe Price
         , msgNewSize    :: Size
         , msgOldSize    :: Size
+        , msgUserId     :: Maybe UserId
+        , msgProfileId  :: Maybe ProfileId
         }
     | ChangeMarket
         { msgTime      :: UTCTime
@@ -122,6 +134,8 @@ data ExchangeMessage
         , msgSide      :: Side
         , msgNewFunds  :: Cost
         , msgOldFunds  :: Cost
+        , msgUserId    :: Maybe UserId
+        , msgProfileId :: Maybe ProfileId
         }
     | Error
         { msgMessage :: Text
@@ -150,6 +164,8 @@ instance FromJSON ExchangeMessage where
                 <*> m .: "side"
                 <*> m .: "remaining_size"
                 <*> m .: "price"
+                <*> m .:? "user_id"
+                <*> m .:? "profile_id"
             "done" -> Done
                 <$> m .: "time"
                 <*> m .: "product_id"
@@ -159,6 +175,8 @@ instance FromJSON ExchangeMessage where
                 <*> m .: "reason"
                 <*> m .:? "price"
                 <*> m .:? "remaining_size"
+                <*> m .:? "user_id"
+                <*> m .:? "profile_id"
             "match" -> Match
                 <$> m .: "time"
                 <*> m .: "product_id"
@@ -169,6 +187,8 @@ instance FromJSON ExchangeMessage where
                 <*> m .: "taker_order_id"
                 <*> m .: "size"
                 <*> m .: "price"
+                <*> m .:? "user_id"
+                <*> m .:? "profile_id"
             "change" -> do
                 ms <- m .:? "price"
                 let market = ChangeMarket
@@ -179,6 +199,8 @@ instance FromJSON ExchangeMessage where
                                 <*> m .: "side"
                                 <*> m .: "new_funds"
                                 <*> m .: "old_funds"
+                                <*> m .:? "user_id"
+                                <*> m .:? "profile_id"
                     limit = ChangeLimit
                                 <$> m .: "time"
                                 <*> m .: "product_id"
@@ -188,6 +210,8 @@ instance FromJSON ExchangeMessage where
                                 <*> m .: "price"
                                 <*> m .: "new_size"
                                 <*> m .: "old_size"
+                                <*> m .:? "user_id"
+                                <*> m .:? "profile_id"
                 case (ms :: Maybe Price) of
                     Nothing -> market <|> limit
                     Just _ -> limit <|> market
@@ -204,6 +228,8 @@ instance FromJSON ExchangeMessage where
                                 <*> pure (mcid :: Maybe ClientOrderId)
                                 <*> m .: "price"
                                 <*> m .: "size"
+                                <*> m .:? "user_id"
+                                <*> m .:? "profile_id"
                     Market -> ReceivedMarket
                                 <$> m .: "time"
                                 <*> m .: "product_id"
@@ -222,6 +248,8 @@ instance FromJSON ExchangeMessage where
                                             (Nothing, Just f ) -> return $ Right (Nothing, f)
                                             (Just s , Just f ) -> return $ Right (Just s , f)
                                             )
+                                <*> m .:? "user_id"
+                                <*> m .:? "profile_id"
             "error" -> error (show m)
 
     parseJSON _ = mzero
