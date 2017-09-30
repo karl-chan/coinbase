@@ -35,8 +35,8 @@ start = Just $ parseTimeOrError True defaultTimeLocale "%FT%X%z" "2015-04-12T20:
 end :: Maybe UTCTime
 end = Just $ parseTimeOrError True defaultTimeLocale "%FT%X%z" "2015-04-23T20:22:37+0000"
 
-withCoinbase :: Exchange a -> IO a
-withCoinbase act = do
+mkConf :: IO ExchangeConf
+mkConf = do
         mgr     <- newManager tlsManagerSettings
         tKey    <- liftM CBS.pack $ getEnv "COINBASE_KEY"
         tSecret <- liftM CBS.pack $ getEnv "COINBASE_SECRET"
@@ -49,20 +49,27 @@ withCoinbase act = do
                         _       -> error "Coinbase sandbox option must be either: TRUE or FALSE (all caps)"
 
         case mkToken tKey tSecret tPass of
-            Right tok -> do res <- runExchange (ExchangeConf mgr (Just tok) apiType) act
-                            case res of
-                                Right s -> return s
-                                Left  f -> error $ show f
+            Right tok -> return $ ExchangeConf mgr (Just tok) apiType
             Left   er -> error $ show er
 
+withCoinbase :: Exchange a -> IO a
+withCoinbase act = do
+        conf <- mkConf
+        res <- runExchange conf act
+        case res of
+            Right s -> return s
+            Left  f -> error $ show f
+
 printSocket :: IO ()
-printSocket = subscribe Live [btc] $ \conn -> do
-        putStrLn "Connected."
-        _ <- forkIO $ forever $ do
-            ds <- WS.receiveData conn
-            let res = eitherDecode ds
-            case res :: Either String ExchangeMessage of
-                Left er -> print er
-                Right v -> print v
-        _ <- forever $ threadDelay (1000000 * 60)
-        return ()
+printSocket = do
+        conf <- mkConf
+        subscribe conf Live [btc] $ \conn -> do
+            putStrLn "Connected."
+            _ <- forkIO $ forever $ do
+                ds <- WS.receiveData conn
+                let res = eitherDecode ds
+                case res :: Either String ExchangeMessage of
+                    Left er -> print er
+                    Right v -> print v
+            _ <- forever $ threadDelay (1000000 * 60)
+            return ()

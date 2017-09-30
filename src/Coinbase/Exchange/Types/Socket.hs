@@ -1,3 +1,4 @@
+{-# LANGUAGE DeriveAnyClass             #-}
 {-# LANGUAGE DeriveDataTypeable         #-}
 {-# LANGUAGE DeriveGeneric              #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
@@ -24,11 +25,19 @@ import           Coinbase.Exchange.Types.Core hiding (OrderStatus (..))
 -------------------------------------------------------------------------------
 
 
+-- | Fields to send along for websocket feed authentication
+data Auth
+    = Auth
+        { authSignature :: Text
+        , authKey :: Text
+        , authPassphrase :: Text
+        , authTimestamp :: Text
+        } deriving (Eq, Show, Read, Data, Typeable, Generic, NFData)
 
 -------------------------------------------------------------------------------
 -- | Messages we can send to the exchange
 data SendExchangeMessage
-    = Subscribe [ProductId]
+    = Subscribe Auth [ProductId]
     | SetHeartbeat Bool
     deriving (Eq, Show, Read, Data, Typeable, Generic)
 
@@ -267,9 +276,13 @@ obj .:?? key = case H.lookup key obj of
 
 -------------------------------------------------------------------------------
 instance ToJSON SendExchangeMessage where
-    toJSON (Subscribe pids) = object
+    toJSON (Subscribe auth pids) = object
         [ "type"       .= ("subscribe" :: Text)
         , "product_ids" .= pids
+        , "signature"   .= authSignature auth
+        , "key"         .= authKey auth
+        , "passphrase"  .= authPassphrase auth
+        , "timestamp"   .= authTimestamp auth
         ]
     toJSON (SetHeartbeat b) = object
         [ "type"       .= ("heartbeat" :: Text)
