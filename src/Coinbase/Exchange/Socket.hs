@@ -1,7 +1,8 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 module Coinbase.Exchange.Socket
-    ( subscribe
+    ( mkAuth
+    , subscribe
     , module Coinbase.Exchange.Types.Socket
     ) where
 
@@ -21,40 +22,46 @@ import           Network.Socket
 import qualified Network.WebSockets             as WS
 import           Text.Printf
 import           Wuss
+
 -------------------------------------------------------------------------------
 import           Coinbase.Exchange.Types
 import           Coinbase.Exchange.Types.Core
 import           Coinbase.Exchange.Types.Socket
--------------------------------------------------------------------------------
 
+-------------------------------------------------------------------------------
 mkAuth :: ExchangeConf -> IO Auth
 mkAuth conf = do
     let meth = "GET"
-        p    = "/users/self/verify"
+        p = "/users/self"
     case authToken conf of
-        Just tok -> do time <- liftM (realToFrac . utcTimeToPOSIXSeconds) (liftIO getCurrentTime)
-                                >>= \t -> return . CBS.pack $ printf "%.0f" (t::Double)
-                       let presign = CBS.concat [time, meth, CBS.pack p]
-                           sign    = Base64.encode $ toBytes (hmac (secret tok) presign :: HMAC SHA256)
-
-                       return Auth
-                            { authSignature = T.decodeUtf8 sign
-                            , authKey = T.decodeUtf8 $ key tok
-                            , authPassphrase = T.decodeUtf8 $ passphrase tok
-                            , authTimestamp = T.decodeUtf8 time
-                            }
-        Nothing  -> throw $ AuthenticationRequiredFailure $ T.pack p
+        Just tok -> do
+            time <-
+                liftM (realToFrac . utcTimeToPOSIXSeconds) (liftIO getCurrentTime) >>= \t ->
+                    return . CBS.pack $ printf "%.0f" (t :: Double)
+            let presign = CBS.concat [time, meth, CBS.pack p]
+                sign = Base64.encode $ toBytes (hmac (secret tok) presign :: HMAC SHA256)
+            return
+                Auth
+                { authSignature = T.decodeUtf8 sign
+                , authKey = T.decodeUtf8 $ key tok
+                , authPassphrase = T.decodeUtf8 $ passphrase tok
+                , authTimestamp = T.decodeUtf8 time
+                }
+        Nothing -> throw $ AuthenticationRequiredFailure $ T.pack p
 
 -------------------------------------------------------------------------------
 subscribe :: ExchangeConf -> ApiType -> [ProductId] -> WS.ClientApp a -> IO a
-subscribe conf atype pids app = withSocketsDo $ do
+subscribe conf atype pids app =
+    withSocketsDo $ do
         auth <- mkAuth conf
         runSecureClient location 443 "/" $ \conn -> do
             WS.sendTextData conn $ encode (Subscribe auth pids)
             app conn
-    where location = case atype of Sandbox -> sandboxSocket
-                                   Live    -> liveSocket
-
+  where
+    location =
+        case atype of
+            Sandbox -> sandboxSocket
+            Live    -> liveSocket
 
 -------------------------------------------------------------------------------
 -- | Enable/disable heartbeat anytime you want in your 'ClientApp'

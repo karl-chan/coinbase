@@ -1,4 +1,4 @@
-{-# LANGUAGE OverloadedStrings #-}
+
 
 module Coinbase.Exchange.Socket.Test (tests) where
 
@@ -19,7 +19,6 @@ import           Coinbase.Exchange.Socket
 
 import qualified Coinbase.Exchange.Private.Test  as P
 
-import Debug.Trace
 
 -------------------------------------
 -- NOTE: [Connectivity Precondition]

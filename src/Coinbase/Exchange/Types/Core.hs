@@ -128,6 +128,18 @@ instance FromJSON Reason where
 
 ----
 
+data StopType = Entry
+    deriving (Eq, Show, Read, Data, Typeable, Generic)
+
+instance NFData StopType
+instance Hashable StopType
+instance ToJSON StopType where
+    toJSON = genericToJSON defaultOptions { constructorTagModifier = map toLower }
+instance FromJSON StopType where
+    parseJSON = genericParseJSON defaultOptions { constructorTagModifier = map toLower }
+
+----
+
 newtype CoinScientific = CoinScientific { unCoinScientific :: Scientific }
     deriving (Eq, Ord, Num, Fractional, Real, RealFrac, Show, Read, Data, Typeable, NFData, Hashable)
 
