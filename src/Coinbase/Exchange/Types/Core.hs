@@ -40,7 +40,7 @@ newtype Cost = Cost { unCost :: CoinScientific }
 newtype OrderId = OrderId { unOrderId :: UUID }
     deriving (Eq, Ord, Show, Read, Data, Typeable, Generic, NFData, Hashable, FromJSON, ToJSON)
 
-newtype UserId = UserId { unUserId :: UUID }
+newtype UserId = UserId { unUserId :: Text }
     deriving (Eq, Ord, Show, Read, Data, Typeable, Generic, NFData, Hashable, FromJSON, ToJSON)
 
 newtype ProfileId = ProfileId { unProfileId :: UUID }
@@ -85,7 +85,7 @@ instance ToJSON TradeId where
 instance FromJSON TradeId where
     parseJSON (String t) = pure $ TradeId $ read $ T.unpack t
     parseJSON (Number n) = pure $ TradeId $ floor n
-    parseJSON _ = mzero
+    parseJSON _          = mzero
 
 --
 
