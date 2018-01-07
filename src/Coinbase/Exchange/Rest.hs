@@ -4,12 +4,15 @@
 
 module Coinbase.Exchange.Rest
   ( coinbaseGet
+  , coinbaseGetPaginated
   , coinbasePost
   , coinbaseDelete
   , coinbaseDeleteDiscardBody
   , coinbaseRequest
   , voidBody
+  , voidPagination
   , processResponse
+  , processPaginated
   ) where
 
 import           Control.Monad.Except
@@ -39,6 +42,9 @@ type Signed = Bool
 
 type IsForExchange = Bool
 
+voidPagination :: Pagination
+voidPagination = Pagination Nothing Nothing
+
 voidBody :: Maybe ()
 voidBody = Nothing
 
@@ -54,6 +60,21 @@ coinbaseGet ::
   -> Maybe a
   -> m b
 coinbaseGet sgn p ma = coinbaseRequest "GET" sgn p ma >>= processResponse True
+
+coinbaseGetPaginated ::
+     ( ToJSON a
+     , FromJSON b
+     , MonadResource m
+     , MonadReader ExchangeConf m
+     , MonadError ExchangeFailure m
+     )
+  => Signed
+  -> Path
+  -> Maybe a
+  -> Pagination
+  -> m (Pagination, b)
+coinbaseGetPaginated sgn p ma pagination =
+  coinbaseRequest "GET" sgn p ma >>= processPaginated
 
 coinbasePost ::
      ( ToJSON a
@@ -221,6 +242,32 @@ processResponse isForExchange res =
         body <- responseBody res $$+- sinkParser (fmap fromJSON json)
         case body of
           Success b -> return b
+          Error er  -> throwError $ ParseFailure $ T.pack er
+      | otherwise -> do
+        body <- responseBody res $$+- CB.sinkLbs
+        throwError $ ApiFailure $ T.decodeUtf8 $ LBS.toStrict body
+
+processPaginated ::
+     ( FromJSON b
+     , MonadResource m
+     , MonadReader ExchangeConf m
+     , MonadError ExchangeFailure m
+     )
+  => Response (ResumableSource m BS.ByteString)
+  -> m (Pagination, b)
+processPaginated res =
+  case responseStatus res of
+    s
+      | s == status200 -> do
+        let headers = responseHeaders res
+            pagination =
+              Pagination
+              { before = CBS.unpack <$> lookup "CB-BEFORE" headers
+              , after = CBS.unpack <$> lookup "CB-AFTER" headers
+              }
+        body <- responseBody res $$+- sinkParser (fmap fromJSON json)
+        case body of
+          Success b -> return (pagination, b)
           Error er  -> throwError $ ParseFailure $ T.pack er
       | otherwise -> do
         body <- responseBody res $$+- CB.sinkLbs
