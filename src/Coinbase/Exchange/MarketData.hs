@@ -10,6 +10,7 @@ module Coinbase.Exchange.MarketData
   , getOrderBook
   , getProductTicker
   , getTrades
+  , getTradesPaginated
   , getHistory
   , getStats
   , getCurrencies
@@ -74,9 +75,16 @@ getProductTicker (ProductId p) =
 getTrades ::
      (MonadResource m, MonadReader ExchangeConf m, MonadError ExchangeFailure m)
   => ProductId
-  -> Pagination
-  -> m (Pagination, [Trade])
+  -> m [Trade]
 getTrades (ProductId p) =
+  coinbaseGet False ("/products/" ++ T.unpack p ++ "/trades") voidBody
+
+getTradesPaginated ::
+     (MonadResource m, MonadReader ExchangeConf m, MonadError ExchangeFailure m)
+  => ProductId
+  -> Pagination
+  -> m ([Trade], Pagination)
+getTradesPaginated (ProductId p) =
   coinbaseGetPaginated False ("/products/" ++ T.unpack p ++ "/trades") voidBody
 
 -- Historic Rates (Candles)

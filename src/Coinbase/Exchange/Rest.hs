@@ -10,7 +10,6 @@ module Coinbase.Exchange.Rest
   , coinbaseDeleteDiscardBody
   , coinbaseRequest
   , voidBody
-  , voidPagination
   , processResponse
   , processPaginated
   ) where
@@ -42,9 +41,6 @@ type Signed = Bool
 
 type IsForExchange = Bool
 
-voidPagination :: Pagination
-voidPagination = Pagination Nothing Nothing
-
 voidBody :: Maybe ()
 voidBody = Nothing
 
@@ -72,7 +68,7 @@ coinbaseGetPaginated ::
   -> Path
   -> Maybe a
   -> Pagination
-  -> m (Pagination, b)
+  -> m (b, Pagination)
 coinbaseGetPaginated sgn p ma pagination =
   coinbaseRequest "GET" sgn p ma >>= processPaginated
 
@@ -254,7 +250,7 @@ processPaginated ::
      , MonadError ExchangeFailure m
      )
   => Response (ResumableSource m BS.ByteString)
-  -> m (Pagination, b)
+  -> m (b, Pagination)
 processPaginated res =
   case responseStatus res of
     s
@@ -267,7 +263,7 @@ processPaginated res =
               }
         body <- responseBody res $$+- sinkParser (fmap fromJSON json)
         case body of
-          Success b -> return (pagination, b)
+          Success b -> return (b, pagination)
           Error er  -> throwError $ ParseFailure $ T.pack er
       | otherwise -> do
         body <- responseBody res $$+- CB.sinkLbs

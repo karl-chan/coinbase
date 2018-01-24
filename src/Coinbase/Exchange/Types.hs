@@ -12,6 +12,7 @@ module Coinbase.Exchange.Types
   , Endpoint
   , Path
   , Pagination(..)
+  , nullPagination
   , website
   , sandboxRest
   , sandboxSocket
@@ -96,6 +97,9 @@ data Pagination = Pagination
   { before :: Maybe String
   , after  :: Maybe String
   }
+
+nullPagination :: Pagination
+nullPagination = Pagination {before = Nothing, after = Nothing}
 
 data Token = Token
   { key        :: ByteString

@@ -33,7 +33,9 @@ tests conf =
     , case_parse conf "getTop50OfBook" $ getTop50OfBook defProduct
     , case_parse conf "getOrderBook" $ getOrderBook defProduct
     , case_parse conf "getProductTicker" $ getProductTicker defProduct
-    , case_parse conf "getTrades" $ getTrades defProduct voidPagination
+    , case_parse conf "getTrades" $ getTrades defProduct
+    , case_parse conf "getTradesPaginated" $
+      getTradesPaginated defProduct nullPagination
     , case_parse conf "getHistory" $
       getHistory defProduct defStart defEnd (Just 3600)
     , case_parse conf "getCurrencies" $ getCurrencies
