@@ -140,7 +140,7 @@ instance FromJSON Reason where
 
 ----
 
-data StopType = Entry
+data StopType = Loss | Entry
     deriving (Eq, Show, Read, Data, Typeable, Generic)
 
 instance NFData StopType
