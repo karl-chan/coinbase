@@ -70,7 +70,18 @@ coinbaseGetPaginated ::
   -> Pagination
   -> m (b, Pagination)
 coinbaseGetPaginated sgn p ma pagination =
-  coinbaseRequest "GET" sgn p ma >>= processPaginated
+  let separator =
+        if '?' `elem` p
+          then "&"
+          else "?"
+      suffix =
+        case (before pagination, after pagination) of
+          (Nothing, Nothing) -> ""
+          (Just b, Nothing)  -> "before=" ++ b
+          (Nothing, Just a)  -> "after=" ++ a
+          (Just b, Just a)   -> "before=" ++ b ++ "&" ++ "after=" ++ a
+      paginatedPath = p ++ separator ++ suffix
+  in coinbaseRequest "GET" sgn paginatedPath ma >>= processPaginated
 
 coinbasePost ::
      ( ToJSON a
