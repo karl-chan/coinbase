@@ -4,6 +4,7 @@
 {-# LANGUAGE FlexibleContexts           #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE MultiParamTypeClasses      #-}
+{-# LANGUAGE RecordWildCards            #-}
 {-# LANGUAGE StandaloneDeriving         #-}
 {-# LANGUAGE UndecidableInstances       #-}
 
@@ -57,7 +58,7 @@ import           Network.HTTP.Conduit
 data ApiType
   = Sandbox
   | Live
-  deriving (Show)
+  deriving (Eq, Show)
 
 type Endpoint = String
 
@@ -96,7 +97,7 @@ type Passphrase = ByteString
 data Pagination = Pagination
   { before :: Maybe String
   , after  :: Maybe String
-  }
+  } deriving (Eq, Show)
 
 nullPagination :: Pagination
 nullPagination = Pagination {before = Nothing, after = Nothing}
@@ -105,7 +106,7 @@ data Token = Token
   { key        :: ByteString
   , secret     :: ByteString
   , passphrase :: ByteString
-  }
+  } deriving (Eq, Show)
 
 mkToken :: Key -> Secret -> Passphrase -> Either String Token
 mkToken k s p =
@@ -118,6 +119,15 @@ data ExchangeConf = ExchangeConf
   , authToken :: Maybe Token
   , apiType   :: ApiType
   }
+
+instance Eq ExchangeConf where
+  (==) conf1 conf2 =
+    (authToken conf1 == authToken conf2) && (apiType conf1 == apiType conf2)
+
+instance Show ExchangeConf where
+  show ExchangeConf {..} =
+    "ExchangeConf { authToken = " ++
+    show authToken ++ ", apiType = " ++ show apiType ++ " }"
 
 data ExchangeFailure
   = ParseFailure Text
