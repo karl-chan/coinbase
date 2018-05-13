@@ -33,7 +33,6 @@ module Coinbase.Exchange.Types
   , ExchangeFailure(..)
   , Exchange
   , ExchangeT
-  , ExceptT
   , runExchange
   , runExchangeT
   , execExchange
@@ -41,18 +40,17 @@ module Coinbase.Exchange.Types
   , getManager
   ) where
 
-import           Control.Applicative
-import           Control.Monad.Base
 import           Control.Monad.Catch
 import           Control.Monad.Except
 import           Control.Monad.Reader
-import           Control.Monad.Trans.Resource
 import           Data.ByteString
-import qualified Data.ByteString.Base64       as Base64
+import qualified Data.ByteString.Base64 as Base64
 import           Data.Data
-import           Data.Text                    (Text)
+import           Data.Text              (Text)
 import           GHC.Generics
 import           Network.HTTP.Conduit
+import           UnliftIO
+import           UnliftIO.Resource
 
 -- API URLs
 data ApiType
@@ -141,46 +139,31 @@ instance Exception ExchangeFailure
 type Exchange a = ExchangeT IO a
 
 newtype ExchangeT m a = ExchangeT
-  { unExchangeT :: ResourceT (ReaderT ExchangeConf (ExceptT ExchangeFailure m)) a
+  { unExchangeT :: ResourceT (ReaderT ExchangeConf m) a
   } deriving ( Functor
              , Applicative
              , Monad
              , MonadIO
              , MonadThrow
-             , MonadError ExchangeFailure
              , MonadReader ExchangeConf
              )
 
-deriving instance (MonadBase IO m) => MonadBase IO (ExchangeT m)
-
 deriving instance
-         (Monad m, MonadThrow m, MonadIO m, MonadBase IO m) =>
+         (Monad m, MonadThrow m, MonadIO m, MonadUnliftIO m) =>
          MonadResource (ExchangeT m)
 
-runExchange :: ExchangeConf -> Exchange a -> IO (Either ExchangeFailure a)
+runExchange :: ExchangeConf -> Exchange a -> IO a
 runExchange = runExchangeT
 
-runExchangeT ::
-     MonadBaseControl IO m
-  => ExchangeConf
-  -> ExchangeT m a
-  -> m (Either ExchangeFailure a)
-runExchangeT conf =
-  runExceptT . flip runReaderT conf . runResourceT . unExchangeT
+runExchangeT :: MonadUnliftIO m => ExchangeConf -> ExchangeT m a -> m a
+runExchangeT conf = flip runReaderT conf . runResourceT . unExchangeT
 
 execExchange :: ExchangeConf -> Exchange a -> IO a
 execExchange = execExchangeT
 
-execExchangeT ::
-     (MonadThrow m, MonadBaseControl IO m)
-  => ExchangeConf
-  -> ExchangeT m a
-  -> m a
+execExchangeT :: (MonadUnliftIO m) => ExchangeConf -> ExchangeT m a -> m a
 execExchangeT conf act = do
-  v <- runExceptT . flip runReaderT conf . runResourceT . unExchangeT $ act
-  case v of
-    Left er -> throwM er
-    Right v -> return v
+  flip runReaderT conf . runResourceT . unExchangeT $ act
 
 -- Utils
 getManager :: (MonadReader ExchangeConf m) => m Manager

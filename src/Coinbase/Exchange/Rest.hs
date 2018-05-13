@@ -34,6 +34,7 @@ import           Data.Time.Clock.POSIX
 import           Network.HTTP.Conduit
 import           Network.HTTP.Types
 import           Text.Printf
+import           UnliftIO
 
 import           Coinbase.Exchange.Types
 
@@ -49,7 +50,7 @@ coinbaseGet ::
      , FromJSON b
      , MonadResource m
      , MonadReader ExchangeConf m
-     , MonadError ExchangeFailure m
+     , MonadThrow m
      )
   => Signed
   -> Path
@@ -62,7 +63,7 @@ coinbaseGetPaginated ::
      , FromJSON b
      , MonadResource m
      , MonadReader ExchangeConf m
-     , MonadError ExchangeFailure m
+     , MonadThrow m
      )
   => Signed
   -> Path
@@ -81,14 +82,14 @@ coinbaseGetPaginated sgn p ma pagination =
           (Nothing, Just a)  -> "after=" ++ a
           (Just b, Just a)   -> "before=" ++ b ++ "&" ++ "after=" ++ a
       paginatedPath = p ++ separator ++ suffix
-  in coinbaseRequest "GET" sgn paginatedPath ma >>= processPaginated
+   in coinbaseRequest "GET" sgn paginatedPath ma >>= processPaginated
 
 coinbasePost ::
      ( ToJSON a
      , FromJSON b
      , MonadResource m
      , MonadReader ExchangeConf m
-     , MonadError ExchangeFailure m
+     , MonadThrow m
      )
   => Signed
   -> Path
@@ -101,7 +102,7 @@ coinbaseDelete ::
      , FromJSON b
      , MonadResource m
      , MonadReader ExchangeConf m
-     , MonadError ExchangeFailure m
+     , MonadThrow m
      )
   => Signed
   -> Path
@@ -111,11 +112,7 @@ coinbaseDelete sgn p ma =
   coinbaseRequest "DELETE" sgn p ma >>= processResponse True
 
 coinbaseDeleteDiscardBody ::
-     ( ToJSON a
-     , MonadResource m
-     , MonadReader ExchangeConf m
-     , MonadError ExchangeFailure m
-     )
+     (ToJSON a, MonadResource m, MonadReader ExchangeConf m, MonadThrow m)
   => Signed
   -> Path
   -> Maybe a
@@ -124,16 +121,12 @@ coinbaseDeleteDiscardBody sgn p ma =
   coinbaseRequest "DELETE" sgn p ma >>= processEmpty
 
 coinbaseRequest ::
-     ( ToJSON a
-     , MonadResource m
-     , MonadReader ExchangeConf m
-     , MonadError ExchangeFailure m
-     )
+     (ToJSON a, MonadResource m, MonadReader ExchangeConf m, MonadThrow m)
   => Method
   -> Signed
   -> Path
   -> Maybe a
-  -> m (Response (ResumableSource m BS.ByteString))
+  -> m (Response (ConduitM () BS.ByteString m ()))
 coinbaseRequest meth sgn p ma = do
   conf <- ask
   req <-
@@ -142,24 +135,20 @@ coinbaseRequest meth sgn p ma = do
       Live    -> parseUrlThrow $ liveRest ++ p
   let req' =
         req
-        { method = meth
-        , requestHeaders =
-            [("user-agent", "haskell"), ("accept", "application/json")]
-        }
+          { method = meth
+          , requestHeaders =
+              [("user-agent", "haskell"), ("accept", "application/json")]
+          }
   flip http (manager conf) =<<
     signMessage True sgn meth p =<< encodeBody ma req'
 
 realCoinbaseRequest ::
-     ( ToJSON a
-     , MonadResource m
-     , MonadReader ExchangeConf m
-     , MonadError ExchangeFailure m
-     )
+     (ToJSON a, MonadResource m, MonadReader ExchangeConf m, MonadThrow m)
   => Method
   -> Signed
   -> Path
   -> Maybe a
-  -> m (Response (ResumableSource m BS.ByteString))
+  -> m (Response (ConduitM () BS.ByteString m ()))
 realCoinbaseRequest meth sgn p ma = do
   conf <- ask
   req <-
@@ -168,13 +157,13 @@ realCoinbaseRequest meth sgn p ma = do
       Live    -> parseUrlThrow $ liveRealCoinbaseRest ++ p
   let req' =
         req
-        { method = meth
-        , requestHeaders =
-            [ ("user-agent", "haskell")
-            , ("accept", "application/json")
-            , ("content-type", "application/json")
-            ]
-        }
+          { method = meth
+          , requestHeaders =
+              [ ("user-agent", "haskell")
+              , ("accept", "application/json")
+              , ("content-type", "application/json")
+              ]
+          }
   flip http (manager conf) =<<
     signMessage False sgn meth p =<< encodeBody ma req'
 
@@ -182,14 +171,14 @@ encodeBody :: (ToJSON a, Monad m) => Maybe a -> Request -> m Request
 encodeBody (Just a) req =
   return
     req
-    { requestHeaders =
-        requestHeaders req ++ [("content-type", "application/json")]
-    , requestBody = RequestBodyBS $ LBS.toStrict $ encode a
-    }
+      { requestHeaders =
+          requestHeaders req ++ [("content-type", "application/json")]
+      , requestBody = RequestBodyBS $ LBS.toStrict $ encode a
+      }
 encodeBody Nothing req = return req
 
 signMessage ::
-     (MonadIO m, MonadReader ExchangeConf m, MonadError ExchangeFailure m)
+     (MonadIO m, MonadReader ExchangeConf m)
   => IsForExchange
   -> Signed
   -> Method
@@ -214,53 +203,45 @@ signMessage isForExchange True meth p req = do
                      (hmac (Base64.encode $ secret tok) presign :: HMAC SHA256)
       return
         req
-        { requestBody = RequestBodyBS rBody
-        , requestHeaders =
-            requestHeaders req ++
-            [ ("cb-access-key", key tok)
-            , ("cb-access-sign", sign)
-            , ("cb-access-timestamp", time)
-            ] ++
-            if isForExchange
-              then [("cb-access-passphrase", passphrase tok)]
-              else [("cb-version", "2016-05-11")]
-        }
-    Nothing -> throwError $ AuthenticationRequiredFailure $ T.pack p
+          { requestBody = RequestBodyBS rBody
+          , requestHeaders =
+              requestHeaders req ++
+              [ ("cb-access-key", key tok)
+              , ("cb-access-sign", sign)
+              , ("cb-access-timestamp", time)
+              ] ++
+              if isForExchange
+                then [("cb-access-passphrase", passphrase tok)]
+                else [("cb-version", "2016-05-11")]
+          }
+    Nothing -> throwIO $ AuthenticationRequiredFailure $ T.pack p
   where
     pullBody (RequestBodyBS b)  = return b
     pullBody (RequestBodyLBS b) = return $ LBS.toStrict b
-    pullBody _                  = throwError AuthenticationRequiresByteStrings
+    pullBody _                  = throwIO AuthenticationRequiresByteStrings
 signMessage _ False _ _ req = return req
 
 --
 processResponse ::
-     ( FromJSON b
-     , MonadResource m
-     , MonadReader ExchangeConf m
-     , MonadError ExchangeFailure m
-     )
+     (FromJSON b, MonadResource m, MonadReader ExchangeConf m, MonadThrow m)
   => IsForExchange
-  -> Response (ResumableSource m BS.ByteString)
+  -> Response (ConduitM () BS.ByteString m ())
   -> m b
 processResponse isForExchange res =
   case responseStatus res of
     s
       | s == status200 || (s == created201 && not isForExchange) -> do
-        body <- responseBody res $$+- sinkParser (fmap fromJSON json)
+        body <- responseBody res `connect` sinkParser (fmap fromJSON json)
         case body of
           Success b -> return b
-          Error er  -> throwError $ ParseFailure $ T.pack er
+          Error er  -> throwIO $ ParseFailure $ T.pack er
       | otherwise -> do
-        body <- responseBody res $$+- CB.sinkLbs
-        throwError $ ApiFailure $ T.decodeUtf8 $ LBS.toStrict body
+        body <- responseBody res `connect` CB.sinkLbs
+        throwIO $ ApiFailure $ T.decodeUtf8 $ LBS.toStrict body
 
 processPaginated ::
-     ( FromJSON b
-     , MonadResource m
-     , MonadReader ExchangeConf m
-     , MonadError ExchangeFailure m
-     )
-  => Response (ResumableSource m BS.ByteString)
+     (FromJSON b, MonadResource m, MonadReader ExchangeConf m, MonadThrow m)
+  => Response (ConduitM () BS.ByteString m ())
   -> m (b, Pagination)
 processPaginated res =
   case responseStatus res of
@@ -269,25 +250,25 @@ processPaginated res =
         let headers = responseHeaders res
             pagination =
               Pagination
-              { before = CBS.unpack <$> lookup "CB-BEFORE" headers
-              , after = CBS.unpack <$> lookup "CB-AFTER" headers
-              }
-        body <- responseBody res $$+- sinkParser (fmap fromJSON json)
+                { before = CBS.unpack <$> lookup "CB-BEFORE" headers
+                , after = CBS.unpack <$> lookup "CB-AFTER" headers
+                }
+        body <- responseBody res `connect` sinkParser (fmap fromJSON json)
         case body of
           Success b -> return (b, pagination)
-          Error er  -> throwError $ ParseFailure $ T.pack er
+          Error er  -> throwIO $ ParseFailure $ T.pack er
       | otherwise -> do
-        body <- responseBody res $$+- CB.sinkLbs
-        throwError $ ApiFailure $ T.decodeUtf8 $ LBS.toStrict body
+        body <- responseBody res `connect` CB.sinkLbs
+        throwIO $ ApiFailure $ T.decodeUtf8 $ LBS.toStrict body
 
 processEmpty ::
-     (MonadResource m, MonadReader ExchangeConf m, MonadError ExchangeFailure m)
-  => Response (ResumableSource m BS.ByteString)
+     (MonadResource m, MonadReader ExchangeConf m)
+  => Response (ConduitM () BS.ByteString m ())
   -> m ()
 processEmpty res =
   case responseStatus res of
     s
       | s == status200 -> return ()
       | otherwise -> do
-        body <- responseBody res $$+- CB.sinkLbs
-        throwError $ ApiFailure $ T.decodeUtf8 $ LBS.toStrict body
+        body <- responseBody res `connect` CB.sinkLbs
+        throwIO $ ApiFailure $ T.decodeUtf8 $ LBS.toStrict body

@@ -52,6 +52,7 @@ library
                     ,   byteable
                     ,   exceptions
                     ,   unordered-containers
+                    ,   unliftio
 
                     ,   old-locale
 

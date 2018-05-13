@@ -36,27 +36,26 @@ import           Coinbase.Exchange.Types.MarketData
 
 -- Products
 getProducts ::
-     (MonadResource m, MonadReader ExchangeConf m, MonadError ExchangeFailure m)
-  => m [Product]
+     (MonadResource m, MonadReader ExchangeConf m, MonadThrow m) => m [Product]
 getProducts = coinbaseGet False "/products" voidBody
 
 -- Order Book
 getTopOfBook ::
-     (MonadResource m, MonadReader ExchangeConf m, MonadError ExchangeFailure m)
+     (MonadResource m, MonadReader ExchangeConf m, MonadThrow m)
   => ProductId
   -> m (Book Aggregate)
 getTopOfBook (ProductId p) =
   coinbaseGet False ("/products/" ++ T.unpack p ++ "/book?level=1") voidBody
 
 getTop50OfBook ::
-     (MonadResource m, MonadReader ExchangeConf m, MonadError ExchangeFailure m)
+     (MonadResource m, MonadReader ExchangeConf m, MonadThrow m)
   => ProductId
   -> m (Book Aggregate)
 getTop50OfBook (ProductId p) =
   coinbaseGet False ("/products/" ++ T.unpack p ++ "/book?level=2") voidBody
 
 getOrderBook ::
-     (MonadResource m, MonadReader ExchangeConf m, MonadError ExchangeFailure m)
+     (MonadResource m, MonadReader ExchangeConf m, MonadThrow m)
   => ProductId
   -> m (Book OrderId)
 getOrderBook (ProductId p) =
@@ -64,7 +63,7 @@ getOrderBook (ProductId p) =
 
 -- Product Ticker
 getProductTicker ::
-     (MonadResource m, MonadReader ExchangeConf m, MonadError ExchangeFailure m)
+     (MonadResource m, MonadReader ExchangeConf m, MonadThrow m)
   => ProductId
   -> m Tick
 getProductTicker (ProductId p) =
@@ -73,14 +72,14 @@ getProductTicker (ProductId p) =
 -- Product Trades
 -- | Currently Broken: coinbase api doesn't return valid ISO 8601 dates for this route.
 getTrades ::
-     (MonadResource m, MonadReader ExchangeConf m, MonadError ExchangeFailure m)
+     (MonadResource m, MonadReader ExchangeConf m, MonadThrow m)
   => ProductId
   -> m [Trade]
 getTrades (ProductId p) =
   coinbaseGet False ("/products/" ++ T.unpack p ++ "/trades") voidBody
 
 getTradesPaginated ::
-     (MonadResource m, MonadReader ExchangeConf m, MonadError ExchangeFailure m)
+     (MonadResource m, MonadReader ExchangeConf m, MonadThrow m)
   => ProductId
   -> Pagination
   -> m ([Trade], Pagination)
@@ -95,7 +94,7 @@ type EndTime = UTCTime
 type Scale = Int
 
 getHistory ::
-     (MonadResource m, MonadReader ExchangeConf m, MonadError ExchangeFailure m)
+     (MonadResource m, MonadReader ExchangeConf m, MonadThrow m)
   => ProductId
   -> Maybe StartTime
   -> Maybe EndTime
@@ -121,11 +120,11 @@ getHistory (ProductId p) start end scale = coinbaseGet False path voidBody
         Just s  -> [("granularity", show s)]
     fmt t =
       let t' = formatTime defaultTimeLocale "%FT%T." t
-      in t' ++ take 6 (formatTime defaultTimeLocale "%q" t) ++ "Z"
+       in t' ++ take 6 (formatTime defaultTimeLocale "%q" t) ++ "Z"
 
 -- Product Stats
 getStats ::
-     (MonadResource m, MonadReader ExchangeConf m, MonadError ExchangeFailure m)
+     (MonadResource m, MonadReader ExchangeConf m, MonadThrow m)
   => ProductId
   -> m Stats
 getStats (ProductId p) =
@@ -133,12 +132,11 @@ getStats (ProductId p) =
 
 -- Exchange Currencies
 getCurrencies ::
-     (MonadResource m, MonadReader ExchangeConf m, MonadError ExchangeFailure m)
-  => m [Currency]
+     (MonadResource m, MonadReader ExchangeConf m, MonadThrow m) => m [Currency]
 getCurrencies = coinbaseGet False "/currencies" voidBody
 
 -- Exchange Time
 getExchangeTime ::
-     (MonadResource m, MonadReader ExchangeConf m, MonadError ExchangeFailure m)
+     (MonadResource m, MonadReader ExchangeConf m, MonadThrow m)
   => m ExchangeTime
 getExchangeTime = coinbaseGet False "/time" voidBody
