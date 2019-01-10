@@ -1,3 +1,4 @@
+{-# LANGUAGE DeriveAnyClass             #-}
 {-# LANGUAGE DeriveDataTypeable         #-}
 {-# LANGUAGE DeriveFunctor              #-}
 {-# LANGUAGE DeriveGeneric              #-}
@@ -14,13 +15,10 @@ module Coinbase.Exchange.Types
   , Path
   , Pagination(..)
   , nullPagination
-  , website
   , sandboxRest
   , sandboxSocket
   , liveRest
   , liveSocket
-  , liveRealCoinbaseRest
-  , sandboxRealCoinbaseRest
   , Key
   , Secret
   , Passphrase
@@ -35,14 +33,15 @@ module Coinbase.Exchange.Types
   , ExchangeT
   , runExchange
   , runExchangeT
-  , execExchange
-  , execExchangeT
+  , runExchange
+  , runExchangeT
   , getManager
   ) where
 
 import           Control.Monad.Catch
 import           Control.Monad.Except
 import           Control.Monad.Reader
+import           Data.Aeson.Types
 import           Data.ByteString
 import qualified Data.ByteString.Base64 as Base64
 import           Data.Data
@@ -62,28 +61,17 @@ type Endpoint = String
 
 type Path = String
 
-website :: Endpoint
-website = "https://public.sandbox.gdax.com"
-
 sandboxRest :: Endpoint
-sandboxRest = "https://api-public.sandbox.gdax.com"
+sandboxRest = "https://api-public.sandbox.pro.coinbase.com"
 
 sandboxSocket :: Endpoint
-sandboxSocket = "ws-feed-public.sandbox.gdax.com"
+sandboxSocket = "ws-feed-public.sandbox.pro.coinbase.com"
 
 liveRest :: Endpoint
-liveRest = "https://api.gdax.com"
+liveRest = "https://api.pro.coinbase.com"
 
 liveSocket :: Endpoint
-liveSocket = "ws-feed.gdax.com"
-
--- Coinbase needs to provide real BTC transfers through the exchange API soon,
--- making 2 API calls with 2 sets of authentication credentials is ridiculous.
-liveRealCoinbaseRest :: Endpoint
-liveRealCoinbaseRest = "https://api.coinbase.com"
-
-sandboxRealCoinbaseRest :: Endpoint
-sandboxRealCoinbaseRest = "https://api.sandbox.coinbase.com"
+liveSocket = "ws-feed.pro.coinbase.com"
 
 -- Monad Stack
 type Key = ByteString
@@ -95,7 +83,7 @@ type Passphrase = ByteString
 data Pagination = Pagination
   { before :: Maybe String
   , after  :: Maybe String
-  } deriving (Eq, Show)
+  } deriving (Eq, Show, Generic, FromJSON, ToJSON)
 
 nullPagination :: Pagination
 nullPagination = Pagination {before = Nothing, after = Nothing}
@@ -157,13 +145,6 @@ runExchange = runExchangeT
 
 runExchangeT :: MonadUnliftIO m => ExchangeConf -> ExchangeT m a -> m a
 runExchangeT conf = flip runReaderT conf . runResourceT . unExchangeT
-
-execExchange :: ExchangeConf -> Exchange a -> IO a
-execExchange = execExchangeT
-
-execExchangeT :: (MonadUnliftIO m) => ExchangeConf -> ExchangeT m a -> m a
-execExchangeT conf act = do
-  flip runReaderT conf . runResourceT . unExchangeT $ act
 
 -- Utils
 getManager :: (MonadReader ExchangeConf m) => m Manager

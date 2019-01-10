@@ -36,28 +36,27 @@ import           Coinbase.Exchange.Types.Private
 -- Accounts
 getAccountList ::
      (MonadResource m, MonadReader ExchangeConf m, MonadThrow m) => m [Account]
-getAccountList = coinbaseGet True "/accounts" voidBody
+getAccountList = coinbaseGet True "/accounts"
 
 getAccount ::
      (MonadResource m, MonadReader ExchangeConf m, MonadThrow m)
   => AccountId
   -> m Account
-getAccount (AccountId i) =
-  coinbaseGet True ("/accounts/" ++ toString i) voidBody
+getAccount (AccountId i) = coinbaseGet True ("/accounts/" ++ toString i)
 
 getAccountLedger ::
      (MonadResource m, MonadReader ExchangeConf m, MonadThrow m)
   => AccountId
   -> m [Entry]
 getAccountLedger (AccountId i) =
-  coinbaseGet True ("/accounts/" ++ toString i ++ "/ledger") voidBody
+  coinbaseGet True ("/accounts/" ++ toString i ++ "/ledger")
 
 getAccountHolds ::
      (MonadResource m, MonadReader ExchangeConf m, MonadThrow m)
   => AccountId
   -> m [Hold]
 getAccountHolds (AccountId i) =
-  coinbaseGet True ("/accounts/" ++ toString i ++ "/holds") voidBody
+  coinbaseGet True ("/accounts/" ++ toString i ++ "/holds")
 
 -- Orders
 createOrder ::
@@ -86,7 +85,7 @@ getOrderList ::
      (MonadResource m, MonadReader ExchangeConf m, MonadThrow m)
   => [OrderStatus]
   -> m [Order]
-getOrderList os = coinbaseGet True ("/orders?" ++ query os) voidBody
+getOrderList os = coinbaseGet True ("/orders?" ++ query os)
   where
     query [] = "status=open&status=pending&status=active"
     query xs =
@@ -96,7 +95,7 @@ getOrder ::
      (MonadResource m, MonadReader ExchangeConf m, MonadThrow m)
   => OrderId
   -> m Order
-getOrder (OrderId o) = coinbaseGet True ("/orders/" ++ toString o) voidBody
+getOrder (OrderId o) = coinbaseGet True ("/orders/" ++ toString o)
 
 -- Fills
 getFills ::
@@ -104,7 +103,7 @@ getFills ::
   => Maybe OrderId
   -> Maybe ProductId
   -> m [Fill]
-getFills moid mpid = coinbaseGet True ("/fills?" ++ oid ++ "&" ++ pid) voidBody
+getFills moid mpid = coinbaseGet True ("/fills?" ++ oid ++ "&" ++ pid)
   where
     oid =
       case moid of
@@ -139,5 +138,4 @@ getReportStatus ::
      (MonadResource m, MonadReader ExchangeConf m, MonadThrow m)
   => ReportId
   -> m ReportInfo
-getReportStatus (ReportId r) =
-  coinbaseGet True ("/reports/" ++ toString r) voidBody
+getReportStatus (ReportId r) = coinbaseGet True ("/reports/" ++ toString r)

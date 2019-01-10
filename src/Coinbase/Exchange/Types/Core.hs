@@ -28,6 +28,9 @@ import           Text.Read           (readMaybe)
 newtype ProductId = ProductId { unProductId :: Text }
     deriving (Eq, Ord, Show, Read, Data, Typeable, Generic, IsString, NFData, Hashable, FromJSON, ToJSON)
 
+newtype ChannelId = ChannelId { unChannelId :: Text }
+    deriving (Eq, Ord, Show, Read, Data, Typeable, Generic, IsString, NFData, Hashable, FromJSON, ToJSON)
+
 newtype Price = Price { unPrice :: CoinScientific }
     deriving (Eq, Ord, Num, Fractional, Real, RealFrac, Read, Data, Typeable, Generic, NFData, Hashable, FromJSON)
 instance ToJSON Price where
@@ -50,7 +53,7 @@ instance Show Cost where
     show (Cost (CoinScientific v)) = formatScientific Fixed Nothing v
 
 newtype OrderId = OrderId { unOrderId :: UUID }
-    deriving (Eq, Ord, Show, Read, Data, Typeable, Generic, NFData, Hashable, FromJSON, ToJSON)
+    deriving (Eq, Ord, Show, Read, Data, Typeable, Generic, NFData, Hashable, FromJSON, ToJSON, FromJSONKey, ToJSONKey)
 
 newtype UserId = UserId { unUserId :: Text }
     deriving (Eq, Ord, Show, Read, Data, Typeable, Generic, NFData, Hashable, FromJSON, ToJSON)

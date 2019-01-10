@@ -2,4 +2,4 @@ flags: {}
 packages:
 - '.'
 
-resolver: lts-11.8
+resolver: lts-13.0

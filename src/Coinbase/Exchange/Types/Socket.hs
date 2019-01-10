@@ -38,6 +38,7 @@ instance ToJSON Auth where
 data SendExchangeMessage
   = Subscribe Auth
               [ProductId]
+              [ChannelId]
   | SetHeartbeat Bool
   deriving (Eq, Show, Read, Data, Typeable, Generic)
 
@@ -150,9 +151,6 @@ instance FromJSON ExchangeMessage where
         -- TO DO: `HeartbeatReq` and `Subscribe` message types are missing as those are
         -- never received by the client.
     case (msgtype :: String) of
-      "hearbeat" ->
-        Heartbeat <$> m .: "time" <*> m .: "product_id" <*> m .: "sequence" <*>
-        m .: "last_trade_id"
       "open" ->
         Open <$> m .: "time" <*> m .: "product_id" <*> m .: "sequence" <*>
         m .: "order_id" <*>
@@ -247,6 +245,9 @@ instance FromJSON ExchangeMessage where
         m .: "taker_fee_rate" <*>
         m .:? "user_id" <*>
         m .:? "profile_id"
+      "hearbeat" ->
+        Heartbeat <$> m .: "time" <*> m .: "product_id" <*> m .: "sequence" <*>
+        m .: "last_trade_id"
       "error" -> error (show m)
   parseJSON _ = mzero
 
@@ -264,15 +265,16 @@ obj .:?? key =
 
 -------------------------------------------------------------------------------
 instance ToJSON SendExchangeMessage where
-  toJSON (Subscribe auth pids) =
-    object
-      [ "type" .= ("subscribe" :: Text)
-      , "product_ids" .= pids
-      , "signature" .= authSignature auth
-      , "key" .= authKey auth
-      , "passphrase" .= authPassphrase auth
-      , "timestamp" .= authTimestamp auth
-      ]
+  toJSON (Subscribe auth pids channels) =
+    object $
+    [ "type" .= ("subscribe" :: Text)
+    , "product_ids" .= pids
+    , "channels" .= channels
+    , "signature" .= authSignature auth
+    , "key" .= authKey auth
+    , "passphrase" .= authPassphrase auth
+    , "timestamp" .= authTimestamp auth
+    ]
   toJSON (SetHeartbeat b) = object ["type" .= ("heartbeat" :: Text), "on" .= b]
 
 -------------------------------------------------------------------------------
@@ -397,6 +399,13 @@ instance ToJSON ExchangeMessage where
     ] ++
     optionalField "limit_price" msgMaybeLimitPrice ++
     optionalField "user_id" msgUserId ++ optionalField "profile_id" msgProfileId
+  toJSON Heartbeat {..} =
+    object $
+    [ "time" .= msgTime
+    , "product_id" .= msgProductId
+    , "sequence" .= msgSequence
+    , "last_trade_id" .= msgLastTradeId
+    ]
 
 optionalField :: (ToJSON v) => Text -> Maybe v -> [Pair]
 optionalField key maybeValue =

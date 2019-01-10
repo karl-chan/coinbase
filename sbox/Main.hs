@@ -29,6 +29,9 @@ main = printSocket -- putStrLn "Use GHCi."
 btc :: ProductId
 btc = "BTC-USD"
 
+full :: ChannelId
+full = "full"
+
 start :: Maybe UTCTime
 start =
   Just $
@@ -65,7 +68,7 @@ withCoinbase act = do
 printSocket :: IO ()
 printSocket = do
   conf <- mkConf
-  subscribe conf Live [btc] $ \conn -> do
+  subscribe conf Live [btc] [full] $ \conn -> do
     putStrLn "Connected."
     _ <-
       forkIO $

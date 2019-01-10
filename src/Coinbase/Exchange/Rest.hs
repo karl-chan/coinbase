@@ -11,7 +11,7 @@ module Coinbase.Exchange.Rest
   , coinbaseRequest
   , voidBody
   , processResponse
-  , processPaginated
+  , processPaginatedResponse
   ) where
 
 import           Control.Monad.Except
@@ -46,31 +46,20 @@ voidBody :: Maybe ()
 voidBody = Nothing
 
 coinbaseGet ::
-     ( ToJSON a
-     , FromJSON b
-     , MonadResource m
-     , MonadReader ExchangeConf m
-     , MonadThrow m
-     )
+     (FromJSON b, MonadResource m, MonadReader ExchangeConf m, MonadThrow m)
   => Signed
   -> Path
-  -> Maybe a
   -> m b
-coinbaseGet sgn p ma = coinbaseRequest "GET" sgn p ma >>= processResponse True
+coinbaseGet sgn p =
+  coinbaseRequest "GET" sgn p voidBody >>= processResponse True
 
 coinbaseGetPaginated ::
-     ( ToJSON a
-     , FromJSON b
-     , MonadResource m
-     , MonadReader ExchangeConf m
-     , MonadThrow m
-     )
+     (FromJSON b, MonadResource m, MonadReader ExchangeConf m, MonadThrow m)
   => Signed
   -> Path
-  -> Maybe a
   -> Pagination
   -> m (b, Pagination)
-coinbaseGetPaginated sgn p ma pagination =
+coinbaseGetPaginated sgn p pagination =
   let separator =
         if '?' `elem` p
           then "&"
@@ -82,7 +71,8 @@ coinbaseGetPaginated sgn p ma pagination =
           (Nothing, Just a)  -> "after=" ++ a
           (Just b, Just a)   -> "before=" ++ b ++ "&" ++ "after=" ++ a
       paginatedPath = p ++ separator ++ suffix
-   in coinbaseRequest "GET" sgn paginatedPath ma >>= processPaginated
+   in coinbaseRequest "GET" sgn paginatedPath voidBody >>=
+      processPaginatedResponse
 
 coinbasePost ::
      ( ToJSON a
@@ -141,31 +131,6 @@ coinbaseRequest meth sgn p ma = do
           }
   flip http (manager conf) =<<
     signMessage True sgn meth p =<< encodeBody ma req'
-
-realCoinbaseRequest ::
-     (ToJSON a, MonadResource m, MonadReader ExchangeConf m, MonadThrow m)
-  => Method
-  -> Signed
-  -> Path
-  -> Maybe a
-  -> m (Response (ConduitM () BS.ByteString m ()))
-realCoinbaseRequest meth sgn p ma = do
-  conf <- ask
-  req <-
-    case apiType conf of
-      Sandbox -> parseUrlThrow $ sandboxRealCoinbaseRest ++ p
-      Live    -> parseUrlThrow $ liveRealCoinbaseRest ++ p
-  let req' =
-        req
-          { method = meth
-          , requestHeaders =
-              [ ("user-agent", "haskell")
-              , ("accept", "application/json")
-              , ("content-type", "application/json")
-              ]
-          }
-  flip http (manager conf) =<<
-    signMessage False sgn meth p =<< encodeBody ma req'
 
 encodeBody :: (ToJSON a, Monad m) => Maybe a -> Request -> m Request
 encodeBody (Just a) req =
@@ -239,11 +204,11 @@ processResponse isForExchange res =
         body <- responseBody res `connect` CB.sinkLbs
         throwIO $ ApiFailure $ T.decodeUtf8 $ LBS.toStrict body
 
-processPaginated ::
+processPaginatedResponse ::
      (FromJSON b, MonadResource m, MonadReader ExchangeConf m, MonadThrow m)
   => Response (ConduitM () BS.ByteString m ())
   -> m (b, Pagination)
-processPaginated res =
+processPaginatedResponse res =
   case responseStatus res of
     s
       | s == status200 -> do

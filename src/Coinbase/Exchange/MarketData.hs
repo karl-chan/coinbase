@@ -37,7 +37,7 @@ import           Coinbase.Exchange.Types.MarketData
 -- Products
 getProducts ::
      (MonadResource m, MonadReader ExchangeConf m, MonadThrow m) => m [Product]
-getProducts = coinbaseGet False "/products" voidBody
+getProducts = coinbaseGet False "/products"
 
 -- Order Book
 getTopOfBook ::
@@ -45,21 +45,21 @@ getTopOfBook ::
   => ProductId
   -> m (Book Aggregate)
 getTopOfBook (ProductId p) =
-  coinbaseGet False ("/products/" ++ T.unpack p ++ "/book?level=1") voidBody
+  coinbaseGet False ("/products/" ++ T.unpack p ++ "/book?level=1")
 
 getTop50OfBook ::
      (MonadResource m, MonadReader ExchangeConf m, MonadThrow m)
   => ProductId
   -> m (Book Aggregate)
 getTop50OfBook (ProductId p) =
-  coinbaseGet False ("/products/" ++ T.unpack p ++ "/book?level=2") voidBody
+  coinbaseGet False ("/products/" ++ T.unpack p ++ "/book?level=2")
 
 getOrderBook ::
      (MonadResource m, MonadReader ExchangeConf m, MonadThrow m)
   => ProductId
   -> m (Book OrderId)
 getOrderBook (ProductId p) =
-  coinbaseGet False ("/products/" ++ T.unpack p ++ "/book?level=3") voidBody
+  coinbaseGet False ("/products/" ++ T.unpack p ++ "/book?level=3")
 
 -- Product Ticker
 getProductTicker ::
@@ -67,7 +67,7 @@ getProductTicker ::
   => ProductId
   -> m Tick
 getProductTicker (ProductId p) =
-  coinbaseGet False ("/products/" ++ T.unpack p ++ "/ticker") voidBody
+  coinbaseGet False ("/products/" ++ T.unpack p ++ "/ticker")
 
 -- Product Trades
 -- | Currently Broken: coinbase api doesn't return valid ISO 8601 dates for this route.
@@ -76,7 +76,7 @@ getTrades ::
   => ProductId
   -> m [Trade]
 getTrades (ProductId p) =
-  coinbaseGet False ("/products/" ++ T.unpack p ++ "/trades") voidBody
+  coinbaseGet False ("/products/" ++ T.unpack p ++ "/trades")
 
 getTradesPaginated ::
      (MonadResource m, MonadReader ExchangeConf m, MonadThrow m)
@@ -84,7 +84,7 @@ getTradesPaginated ::
   -> Pagination
   -> m ([Trade], Pagination)
 getTradesPaginated (ProductId p) =
-  coinbaseGetPaginated False ("/products/" ++ T.unpack p ++ "/trades") voidBody
+  coinbaseGetPaginated False ("/products/" ++ T.unpack p ++ "/trades")
 
 -- Historic Rates (Candles)
 type StartTime = UTCTime
@@ -100,7 +100,7 @@ getHistory ::
   -> Maybe EndTime
   -> Maybe Scale
   -> m [Candle]
-getHistory (ProductId p) start end scale = coinbaseGet False path voidBody
+getHistory (ProductId p) start end scale = coinbaseGet False path
   where
     path = "/products/" ++ T.unpack p ++ "/candles?" ++ params
     params =
@@ -128,15 +128,15 @@ getStats ::
   => ProductId
   -> m Stats
 getStats (ProductId p) =
-  coinbaseGet False ("/products/" ++ T.unpack p ++ "/stats") voidBody
+  coinbaseGet False ("/products/" ++ T.unpack p ++ "/stats")
 
 -- Exchange Currencies
 getCurrencies ::
      (MonadResource m, MonadReader ExchangeConf m, MonadThrow m) => m [Currency]
-getCurrencies = coinbaseGet False "/currencies" voidBody
+getCurrencies = coinbaseGet False "/currencies"
 
 -- Exchange Time
 getExchangeTime ::
      (MonadResource m, MonadReader ExchangeConf m, MonadThrow m)
   => m ExchangeTime
-getExchangeTime = coinbaseGet False "/time" voidBody
+getExchangeTime = coinbaseGet False "/time"
