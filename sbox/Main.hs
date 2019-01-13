@@ -29,8 +29,8 @@ main = printSocket -- putStrLn "Use GHCi."
 btc :: ProductId
 btc = "BTC-USD"
 
-full :: ChannelId
-full = "full"
+full :: Channel
+full = Full
 
 start :: Maybe UTCTime
 start =

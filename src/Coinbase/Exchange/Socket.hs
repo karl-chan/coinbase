@@ -55,15 +55,15 @@ subscribe ::
      ExchangeConf
   -> ApiType
   -> [ProductId]
-  -> [ChannelId]
+  -> [Channel]
   -> WS.ClientApp a
   -> IO a
-subscribe conf atype pids cids app =
+subscribe conf atype pids channels app =
   withSocketsDo $ do
     auth <- mkAuth conf
     print auth
     runSecureClient location 443 "/" $ \conn -> do
-      WS.sendTextData conn $ encode (Subscribe auth pids cids)
+      WS.sendTextData conn $ encode (Subscribe auth pids channels)
       app conn
   where
     location =

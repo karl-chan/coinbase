@@ -243,24 +243,6 @@ instance FromJSON SelfTrade where
   parseJSON (String "cb") = return CancelBoth
   parseJSON _             = mzero
 
-data Stop
-  = StopLoss
-  | StopEntry
-  deriving (Eq, Ord, Show, Read, Data, Typeable, Generic)
-
-instance NFData Stop
-
-instance Hashable Stop
-
-instance ToJSON Stop where
-  toJSON StopLoss  = String "loss"
-  toJSON StopEntry = String "entry"
-
-instance FromJSON Stop where
-  parseJSON (String "loss")  = return StopLoss
-  parseJSON (String "entry") = return StopEntry
-  parseJSON _                = mzero
-
 data NewOrder
   = NewLimitOrder { noProductId   :: ProductId
                   , noSide        :: Side
@@ -273,7 +255,7 @@ data NewOrder
                   , noCancelAfter :: Maybe OrderCancelAfter
                   , noPostOnly    :: Bool
         ---
-                  , noStopPrice   :: Maybe (Stop, Price) }
+                  , noStopPrice   :: Maybe (StopType, Price) }
   | NewMarketOrder { noProductId      :: ProductId
                    , noSide           :: Side
                    , noSelfTrade      :: SelfTrade
@@ -281,7 +263,7 @@ data NewOrder
         ---
                    , noSizeAndOrFunds :: Either Size (Maybe Size, Cost)
         ---
-                   , noStopPrice      :: Maybe (Stop, Price) }
+                   , noStopPrice      :: Maybe (StopType, Price) }
   deriving (Show, Data, Typeable, Generic)
 
 instance NFData NewOrder

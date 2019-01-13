@@ -12,7 +12,9 @@ import           Control.Applicative
 import           Control.DeepSeq
 import           Control.Monad
 import           Data.Aeson.Types             hiding (Error)
+import           Data.Char
 import           Data.Data
+import           Data.Hashable
 import qualified Data.HashMap.Strict          as H
 import           Data.Text                    (Text)
 import           Data.Time
@@ -34,11 +36,32 @@ instance ToJSON Auth where
   toEncoding = genericToEncoding defaultOptions
 
 -------------------------------------------------------------------------------
+data Channel
+  = Ticket
+  | Level2
+  | User
+  | Matches
+  | Fail
+  | Full
+  deriving (Eq, Show, Read, Enum, Bounded, Data, Typeable, Generic)
+
+instance NFData Channel
+
+instance Hashable Channel
+
+instance ToJSON Channel where
+  toJSON = genericToJSON defaultOptions {constructorTagModifier = map toLower}
+
+instance FromJSON Channel where
+  parseJSON =
+    genericParseJSON defaultOptions {constructorTagModifier = map toLower}
+
+-------------------------------------------------------------------------------
 -- | Messages we can send to the exchange
 data SendExchangeMessage
   = Subscribe Auth
               [ProductId]
-              [ChannelId]
+              [Channel]
   | SetHeartbeat Bool
   deriving (Eq, Show, Read, Data, Typeable, Generic)
 
