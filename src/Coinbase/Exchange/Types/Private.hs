@@ -243,6 +243,24 @@ instance FromJSON SelfTrade where
   parseJSON (String "cb") = return CancelBoth
   parseJSON _             = mzero
 
+data Stop
+  = StopLoss
+  | StopEntry
+  deriving (Eq, Ord, Show, Read, Data, Typeable, Generic)
+
+instance NFData Stop
+
+instance Hashable Stop
+
+instance ToJSON Stop where
+  toJSON StopLoss  = String "loss"
+  toJSON StopEntry = String "entry"
+
+instance FromJSON Stop where
+  parseJSON (String "loss")  = return StopLoss
+  parseJSON (String "entry") = return StopEntry
+  parseJSON _                = mzero
+
 data NewOrder
   = NewLimitOrder { noProductId   :: ProductId
                   , noSide        :: Side
@@ -253,20 +271,17 @@ data NewOrder
                   , noSize        :: Size
                   , noTimeInForce :: OrderContigency
                   , noCancelAfter :: Maybe OrderCancelAfter
-                  , noPostOnly    :: Bool }
+                  , noPostOnly    :: Bool
+        ---
+                  , noStopPrice   :: Maybe (Stop, Price) }
   | NewMarketOrder { noProductId      :: ProductId
                    , noSide           :: Side
                    , noSelfTrade      :: SelfTrade
                    , noClientOid      :: Maybe ClientOrderId
         ---
-                   , noSizeAndOrFunds :: Either Size (Maybe Size, Cost) }
-  | NewStopOrder { noProductId      :: ProductId
-                 , noSide           :: Side
-                 , noSelfTrade      :: SelfTrade
-                 , noClientOid      :: Maybe ClientOrderId
+                   , noSizeAndOrFunds :: Either Size (Maybe Size, Cost)
         ---
-                 , noPrice          :: Price
-                 , noSizeAndOrFunds :: Either Size (Maybe Size, Cost) }
+                   , noStopPrice      :: Maybe (Stop, Price) }
   deriving (Show, Data, Typeable, Generic)
 
 instance NFData NewOrder
@@ -283,7 +298,7 @@ instance ToJSON NewOrder where
        , "time_in_force" .= noTimeInForce
        , "post_only" .= noPostOnly
        ] ++
-       clientID ++ cancelAfter)
+       clientID ++ cancelAfter ++ stopPrice)
     where
       clientID =
         case noClientOid of
@@ -293,6 +308,10 @@ instance ToJSON NewOrder where
         case noCancelAfter of
           Just time -> ["cancel_after" .= time]
           Nothing   -> []
+      stopPrice =
+        case noStopPrice of
+          Just (stop, stopPrice) -> ["stop" .= stop, "stop_price" .= stopPrice]
+          Nothing -> []
   toJSON NewMarketOrder {..} =
     object
       ([ "type" .= ("market" :: Text)
@@ -300,7 +319,7 @@ instance ToJSON NewOrder where
        , "side" .= noSide
        , "stp" .= noSelfTrade
        ] ++
-       clientID ++ size ++ funds)
+       clientID ++ size ++ funds ++ stopPrice)
     where
       clientID =
         case noClientOid of
@@ -313,27 +332,10 @@ instance ToJSON NewOrder where
             case ms of
               Nothing -> ([], ["funds" .= f])
               Just s' -> (["size" .= s'], ["funds" .= f])
-  toJSON NewStopOrder {..} =
-    object
-      ([ "type" .= ("stop" :: Text)
-       , "product_id" .= noProductId
-       , "side" .= noSide
-       , "stp" .= noSelfTrade
-       , "price" .= noPrice
-       ] ++
-       clientID ++ size ++ funds)
-    where
-      clientID =
-        case noClientOid of
-          Just cid -> ["client_oid" .= cid]
-          Nothing  -> []
-      (size, funds) =
-        case noSizeAndOrFunds of
-          Left s -> (["size" .= s], [])
-          Right (ms, f) ->
-            case ms of
-              Nothing -> ([], ["funds" .= f])
-              Just s' -> (["size" .= s'], ["funds" .= f])
+      stopPrice =
+        case noStopPrice of
+          Just (stop, stopPrice) -> ["stop" .= stop, "stop_price" .= stopPrice]
+          Nothing -> []
 
 data OrderConfirmation = OrderConfirmation
   { ocId :: OrderId
