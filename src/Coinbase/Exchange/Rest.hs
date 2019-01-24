@@ -8,10 +8,7 @@ module Coinbase.Exchange.Rest
   , coinbasePost
   , coinbaseDelete
   , coinbaseDeleteDiscardBody
-  , coinbaseRequest
   , voidBody
-  , processResponse
-  , processPaginatedResponse
   ) where
 
 import           Control.Monad.Except
@@ -60,19 +57,8 @@ coinbaseGetPaginated ::
   -> Pagination
   -> m (b, Pagination)
 coinbaseGetPaginated sgn p pagination =
-  let separator =
-        if '?' `elem` p
-          then "&"
-          else "?"
-      suffix =
-        case (before pagination, after pagination) of
-          (Nothing, Nothing) -> ""
-          (Just b, Nothing)  -> "before=" ++ b
-          (Nothing, Just a)  -> "after=" ++ a
-          (Just b, Just a)   -> "before=" ++ b ++ "&" ++ "after=" ++ a
-      paginatedPath = p ++ separator ++ suffix
-   in coinbaseRequest "GET" sgn paginatedPath voidBody >>=
-      processPaginatedResponse
+  coinbaseRequestPaginated "GET" sgn p voidBody pagination >>=
+  processPaginatedResponse
 
 coinbasePost ::
      ( ToJSON a
@@ -131,6 +117,28 @@ coinbaseRequest meth sgn p ma = do
           }
   flip http (manager conf) =<<
     signMessage True sgn meth p =<< encodeBody ma req'
+
+coinbaseRequestPaginated ::
+     (ToJSON a, MonadResource m, MonadReader ExchangeConf m, MonadThrow m)
+  => Method
+  -> Signed
+  -> Path
+  -> Maybe a
+  -> Pagination
+  -> m (Response (ConduitM () BS.ByteString m ()))
+coinbaseRequestPaginated meth sgn p ma pagination =
+  let separator =
+        if '?' `elem` p
+          then "&"
+          else "?"
+      suffix =
+        case (before pagination, after pagination) of
+          (Nothing, Nothing) -> ""
+          (Just b, Nothing)  -> "before=" ++ b
+          (Nothing, Just a)  -> "after=" ++ a
+          (Just b, Just a)   -> "before=" ++ b ++ "&" ++ "after=" ++ a
+      paginatedPath = p ++ separator ++ suffix
+   in coinbaseRequest meth sgn paginatedPath ma
 
 encodeBody :: (ToJSON a, Monad m) => Maybe a -> Request -> m Request
 encodeBody (Just a) req =

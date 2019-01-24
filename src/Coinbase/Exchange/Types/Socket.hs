@@ -8,9 +8,9 @@
 module Coinbase.Exchange.Types.Socket where
 
 -------------------------------------------------------------------------------
-import           Control.Applicative
 import           Control.DeepSeq
 import           Control.Monad
+import           Data.Aeson                   (encode)
 import           Data.Aeson.Types             hiding (Error)
 import           Data.Char
 import           Data.Data
@@ -59,7 +59,7 @@ instance FromJSON Channel where
 -------------------------------------------------------------------------------
 -- | Messages we can send to the exchange
 data SendExchangeMessage
-  = Subscribe Auth
+  = Subscribe (Maybe Auth)
               [ProductId]
               [Channel]
   | SetHeartbeat Bool
@@ -74,36 +74,27 @@ data ExchangeMessage
               , msgProductId   :: ProductId
               , msgSequence    :: Sequence
               , msgLastTradeId :: TradeId }
+  | Subscriptions { msgChannels :: [ChannelSubscription] }
   | ReceivedLimit { msgTime      :: UTCTime
                   , msgProductId :: ProductId
                   , msgSequence  :: Sequence
                   , msgOrderId   :: OrderId
                   , msgSide      :: Side
-                  , msgClientOid :: Maybe ClientOrderId
-        --
-                  , msgPrice     :: Price
                   , msgSize      :: Size
-                  , msgUserId    :: Maybe UserId
-                  , msgProfileId :: Maybe ProfileId }
-  | ReceivedMarket { msgTime         :: UTCTime
-                   , msgProductId    :: ProductId
-                   , msgSequence     :: Sequence
-                   , msgOrderId      :: OrderId
-                   , msgSide         :: Side
-                   , msgClientOid    :: Maybe ClientOrderId
-        -- market orders have no price and are bounded by either size, funds or both
-                   , msgMarketBounds :: (Either Size (Maybe Size, Cost))
-                   , msgUserId       :: Maybe UserId
-                   , msgProfileId    :: Maybe ProfileId }
+                  , msgPrice     :: Price }
+  | ReceivedMarket { msgTime           :: UTCTime
+                   , msgProductId      :: ProductId
+                   , msgSequence       :: Sequence
+                   , msgOrderId        :: OrderId
+                   , msgSide           :: Side
+                   , msgSizeAndOrFunds :: Either Size (Maybe Size, Cost) }
   | Open { msgTime          :: UTCTime
          , msgProductId     :: ProductId
          , msgSequence      :: Sequence
          , msgOrderId       :: OrderId
          , msgSide          :: Side
          , msgRemainingSize :: Size
-         , msgPrice         :: Price
-         , msgUserId        :: Maybe UserId
-         , msgProfileId     :: Maybe ProfileId }
+         , msgPrice         :: Price }
   | Match { msgTime           :: UTCTime
           , msgProductId      :: ProductId
           , msgSequence       :: Sequence
@@ -129,9 +120,7 @@ data ExchangeMessage
         -- CURRENTLY ** `remaining_size` reported in Done messages is sometimes incorrect **
         -- This appears to be bug at GDAX. I've told them about it.
          , msgMaybePrice   :: Maybe Price
-         , msgMaybeRemSize :: Maybe Size
-         , msgUserId       :: Maybe UserId
-         , msgProfileId    :: Maybe ProfileId }
+         , msgMaybeRemSize :: Maybe Size }
   | ChangeLimit { msgTime      :: UTCTime
                 , msgProductId :: ProductId
                 , msgSequence  :: Sequence
@@ -139,33 +128,54 @@ data ExchangeMessage
                 , msgSide      :: Side
                 , msgPrice     :: Price
                 , msgNewSize   :: Size
-                , msgOldSize   :: Size
-                , msgUserId    :: Maybe UserId
-                , msgProfileId :: Maybe ProfileId }
+                , msgOldSize   :: Size }
   | ChangeMarket { msgTime      :: UTCTime
                  , msgProductId :: ProductId
                  , msgSequence  :: Sequence
                  , msgOrderId   :: OrderId
                  , msgSide      :: Side
                  , msgNewFunds  :: Cost
-                 , msgOldFunds  :: Cost
-                 , msgUserId    :: Maybe UserId
-                 , msgProfileId :: Maybe ProfileId }
-  | Activate { msgTime            :: UTCTime
-             , msgProductId       :: ProductId
-             , msgOrderId         :: OrderId
-             , msgSide            :: Side
-             , msgStopType        :: StopType
-             , msgStopPrice       :: Price
-             , msgMaybeLimitPrice :: Maybe Price
-             , msgFunds           :: Cost
-             , msgTakerFeeRate    :: CoinScientific
-             , msgUserId          :: Maybe UserId
-             , msgProfileId       :: Maybe ProfileId }
+                 , msgOldFunds  :: Cost }
+  | Activate { msgTime         :: UTCTime
+             , msgProductId    :: ProductId
+             , msgTimestamp    :: NominalDiffTime
+             , msgOrderId      :: OrderId
+             , msgSide         :: Side
+             , msgStopType     :: StopType
+             , msgStopPrice    :: Price
+             , msgSize         :: Size
+             , msgFunds        :: Cost
+             , msgTakerFeeRate :: CoinScientific
+             , msgMaybePrivate :: Maybe Bool }
+  | Ticker { msgTradeId   :: TradeId
+           , msgSequence  :: Sequence
+           , msgTime      :: UTCTime
+           , msgProductId :: ProductId
+           , msgPrice     :: Price
+           , msgSide      :: Side
+           , msgLastSize  :: Size
+           , msgBestBid   :: Price
+           , msgBestAsk   :: Price }
+  | Snapshot { msgProductId :: ProductId
+             , msgBids      :: [(Price, Size)]
+             , msgAsks      :: [(Price, Size)] }
+  | L2Update { msgProductId :: ProductId
+             , msgChanges   :: [(Side, Price, Size)] }
   | Error { msgMessage :: Text }
-  deriving (Eq, Show, Read, Data, Typeable, Generic)
+  deriving (Eq, Show, Data, Typeable, Generic)
 
 instance NFData ExchangeMessage
+
+data ChannelSubscription = ChannelSubscription
+  { msgName       :: Channel
+  , msgProductIds :: [ProductId]
+  } deriving (Eq, Show, Data, Typeable, Generic, NFData)
+
+instance ToJSON ChannelSubscription where
+  toJSON = genericToJSON coinbaseAesonOptions
+
+instance FromJSON ChannelSubscription where
+  parseJSON = genericParseJSON coinbaseAesonOptions
 
 -----------------------------
 instance FromJSON ExchangeMessage where
@@ -174,23 +184,38 @@ instance FromJSON ExchangeMessage where
         -- TO DO: `HeartbeatReq` and `Subscribe` message types are missing as those are
         -- never received by the client.
     case (msgtype :: String) of
+      "hearbeat" ->
+        Heartbeat <$> m .: "time" <*> m .: "product_id" <*> m .: "sequence" <*>
+        m .: "last_trade_id"
+      "subscriptions" -> Subscriptions <$> m .: "channels"
+      "received" -> do
+        typ <- m .: "order_type"
+        case typ of
+          Limit ->
+            ReceivedLimit <$> m .: "time" <*> m .: "product_id" <*>
+            m .: "sequence" <*>
+            m .: "order_id" <*>
+            m .: "side" <*>
+            m .: "size" <*>
+            m .: "price"
+          Market ->
+            ReceivedMarket <$> m .: "time" <*> m .: "product_id" <*>
+            m .: "sequence" <*>
+            m .: "order_id" <*>
+            m .: "side" <*>
+            (do ms <- m .:? "size"
+                mf <- m .:? "funds"
+                case (ms, mf) of
+                  (Nothing, Nothing) -> mzero
+                  (Just s, Nothing)  -> return $ Left s
+                  (Nothing, Just f)  -> return $ Right (Nothing, f)
+                  (Just s, Just f)   -> return $ Right (Just s, f))
       "open" ->
         Open <$> m .: "time" <*> m .: "product_id" <*> m .: "sequence" <*>
         m .: "order_id" <*>
         m .: "side" <*>
         m .: "remaining_size" <*>
-        m .: "price" <*>
-        m .:? "user_id" <*>
-        m .:? "profile_id"
-      "done" ->
-        Done <$> m .: "time" <*> m .: "product_id" <*> m .: "sequence" <*>
-        m .: "order_id" <*>
-        m .: "side" <*>
-        m .: "reason" <*>
-        m .:? "price" <*>
-        m .:? "remaining_size" <*>
-        m .:? "user_id" <*>
-        m .:? "profile_id"
+        m .: "price"
       "match" ->
         Match <$> m .: "time" <*> m .: "product_id" <*> m .: "sequence" <*>
         m .: "side" <*>
@@ -203,75 +228,56 @@ instance FromJSON ExchangeMessage where
         m .:? "profile_id" <*>
         m .:? "taker_user_id" <*>
         m .:? "taker_profile_id"
+      "done" ->
+        Done <$> m .: "time" <*> m .: "product_id" <*> m .: "sequence" <*>
+        m .: "order_id" <*>
+        m .: "side" <*>
+        m .: "reason" <*>
+        m .:? "price" <*>
+        m .:? "remaining_size"
       "change" -> do
-        ms <- m .:? "price"
-        let market =
-              ChangeMarket <$> m .: "time" <*> m .: "product_id" <*>
-              m .: "sequence" <*>
-              m .: "order_id" <*>
-              m .: "side" <*>
-              m .: "new_funds" <*>
-              m .: "old_funds" <*>
-              m .:? "user_id" <*>
-              m .:? "profile_id"
-            limit =
-              ChangeLimit <$> m .: "time" <*> m .: "product_id" <*>
-              m .: "sequence" <*>
-              m .: "order_id" <*>
-              m .: "side" <*>
-              m .: "price" <*>
-              m .: "new_size" <*>
-              m .: "old_size" <*>
-              m .:? "user_id" <*>
-              m .:? "profile_id"
-        case (ms :: Maybe Price) of
-          Nothing -> market <|> limit
-          Just _  -> limit <|> market
-      "received" -> do
-        typ <- m .: "order_type"
-        mcid <- m .:? "client_oid"
-        case typ of
-          Limit ->
-            ReceivedLimit <$> m .: "time" <*> m .: "product_id" <*>
+        maybePrice <- m .:? "price"
+        case (maybePrice :: Maybe Price) of
+          Just price ->
+            ChangeLimit <$> m .: "time" <*> m .: "product_id" <*>
             m .: "sequence" <*>
             m .: "order_id" <*>
             m .: "side" <*>
-            pure (mcid :: Maybe ClientOrderId) <*>
-            m .: "price" <*>
-            m .: "size" <*>
-            m .:? "user_id" <*>
-            m .:? "profile_id"
-          Market ->
-            ReceivedMarket <$> m .: "time" <*> m .: "product_id" <*>
+            (pure price) <*>
+            m .: "new_size" <*>
+            m .: "old_size"
+          Nothing ->
+            ChangeMarket <$> m .: "time" <*> m .: "product_id" <*>
             m .: "sequence" <*>
             m .: "order_id" <*>
             m .: "side" <*>
-            pure mcid <*>
-                                        -- I can't try to parse "size" or "funds" with (.:?) here, their type is CoinScientific
-                                        -- but the fields may be "size":null and that will fail the (m .:? "size") parser.
-            (do ms <- m .:?? "size"
-                mf <- m .:?? "funds"
-                case (ms, mf) of
-                  (Nothing, Nothing) -> mzero
-                  (Just s, Nothing)  -> return $ Left s
-                  (Nothing, Just f)  -> return $ Right (Nothing, f)
-                  (Just s, Just f)   -> return $ Right (Just s, f)) <*>
-            m .:? "user_id" <*>
-            m .:? "profile_id"
+            m .: "new_funds" <*>
+            m .: "old_funds"
       "activate" ->
-        Activate <$> m .: "time" <*> m .: "product_id" <*> m .: "order_id" <*>
+        Activate <$> m .: "time" <*> m .: "product_id" <*> m .: "timestamp" <*>
+        m .: "order_id" <*>
         m .: "side" <*>
         m .: "stop_type" <*>
         m .: "stop_price" <*>
-        m .:? "limit_price" <*>
+        m .: "size" <*>
         m .: "funds" <*>
         m .: "taker_fee_rate" <*>
-        m .:? "user_id" <*>
-        m .:? "profile_id"
-      "hearbeat" ->
-        Heartbeat <$> m .: "time" <*> m .: "product_id" <*> m .: "sequence" <*>
-        m .: "last_trade_id"
-      "error" -> error (show m)
+        m .:? "private"
+      "ticker" ->
+        Ticker <$> m .: "trade_id" <*> m .: "sequence" <*> m .: "time" <*>
+        m .: "product_id" <*>
+        m .: "price" <*>
+        m .: "side" <*>
+        m .: "last_size" <*>
+        m .: "best_bid" <*>
+        m .: "best_ask"
+      "snapshot" ->
+        Snapshot <$> m .: "product_id" <*> m .: "bids" <*> m .: "asks"
+      "l2update" -> L2Update <$> m .: "product_id" <*> m .: "changes"
+      "error" -> Error <$> m .: "message"
+      _ ->
+        error $
+        "Failed to decode exchange message: " ++ (show . encode $ Object m)
   parseJSON _ = mzero
 
 ---------------------------
@@ -288,21 +294,66 @@ obj .:?? key =
 
 -------------------------------------------------------------------------------
 instance ToJSON SendExchangeMessage where
-  toJSON (Subscribe auth pids channels) =
+  toJSON (Subscribe maybeAuth pids channels) =
     object $
     [ "type" .= ("subscribe" :: Text)
     , "product_ids" .= pids
     , "channels" .= channels
-    , "signature" .= authSignature auth
-    , "key" .= authKey auth
-    , "passphrase" .= authPassphrase auth
-    , "timestamp" .= authTimestamp auth
-    ]
+    ] ++
+    authDetails
+    where
+      authDetails =
+        case maybeAuth of
+          Nothing -> []
+          Just auth ->
+            [ "signature" .= authSignature auth
+            , "key" .= authKey auth
+            , "passphrase" .= authPassphrase auth
+            , "timestamp" .= authTimestamp auth
+            ]
   toJSON (SetHeartbeat b) = object ["type" .= ("heartbeat" :: Text), "on" .= b]
 
--------------------------------------------------------------------------------
--- | Convenience/storage instance; never sent to exchange
+--- | Convenience/storage instance; never sent to exchange
 instance ToJSON ExchangeMessage where
+  toJSON Heartbeat {..} =
+    object $
+    [ "time" .= msgTime
+    , "product_id" .= msgProductId
+    , "sequence" .= msgSequence
+    , "last_trade_id" .= msgLastTradeId
+    ]
+  toJSON Subscriptions {..} =
+    object $ ["type" .= ("subscriptions" :: Text), "channels" .= msgChannels]
+  toJSON ReceivedLimit {..} =
+    object $
+    [ "type" .= ("received" :: Text)
+    , "time" .= msgTime
+    , "product_id" .= msgProductId
+    , "sequence" .= msgSequence
+    , "order_id" .= msgOrderId
+    , "side" .= msgSide
+    , "size" .= msgSize
+    , "price" .= msgPrice
+    , "order_type" .= Limit
+    ]
+  toJSON ReceivedMarket {..} =
+    object $
+    [ "type" .= ("received" :: Text)
+    , "time" .= msgTime
+    , "product_id" .= msgProductId
+    , "sequence" .= msgSequence
+    , "order_id" .= msgOrderId
+    , "side" .= msgSide
+    ] ++
+    size ++ funds ++ ["order_type" .= Market]
+    where
+      (size, funds) =
+        case msgSizeAndOrFunds of
+          Left s -> (["size" .= s], [])
+          Right (ms, f) ->
+            case ms of
+              Nothing -> ([], ["funds" .= f])
+              Just s' -> (["size" .= s'], ["funds" .= f])
   toJSON Open {..} =
     object $
     [ "type" .= ("open" :: Text)
@@ -313,21 +364,7 @@ instance ToJSON ExchangeMessage where
     , "side" .= msgSide
     , "remaining_size" .= msgRemainingSize
     , "price" .= msgPrice
-    ] ++
-    optionalField "user_id" msgUserId ++ optionalField "profile_id" msgProfileId
-  toJSON Done {..} =
-    object $
-    [ "type" .= ("done" :: Text)
-    , "time" .= msgTime
-    , "product_id" .= msgProductId
-    , "sequence" .= msgSequence
-    , "order_id" .= msgOrderId
-    , "side" .= msgSide
-    , "reason" .= msgReason
-    ] ++
-    optionalField "price" msgMaybePrice ++
-    optionalField "remaining_size" msgMaybeRemSize ++
-    optionalField "user_id" msgUserId ++ optionalField "profile_id" msgProfileId
+    ]
   toJSON Match {..} =
     object $
     [ "type" .= ("match" :: Text)
@@ -345,8 +382,18 @@ instance ToJSON ExchangeMessage where
     optionalField "profile_id" msgProfileId ++
     optionalField "taker_user_id" msgTakerUserId ++
     optionalField "taker_profile_id" msgTakerProfileId
-  toJSON Error {..} =
-    object ["type" .= ("error" :: Text), "message" .= msgMessage]
+  toJSON Done {..} =
+    object $
+    [ "type" .= ("done" :: Text)
+    , "time" .= msgTime
+    , "product_id" .= msgProductId
+    , "sequence" .= msgSequence
+    , "order_id" .= msgOrderId
+    , "side" .= msgSide
+    , "reason" .= msgReason
+    ] ++
+    optionalField "price" msgMaybePrice ++
+    optionalField "remaining_size" msgMaybeRemSize
   toJSON ChangeLimit {..} =
     object $
     [ "type" .= ("change" :: Text)
@@ -355,11 +402,10 @@ instance ToJSON ExchangeMessage where
     , "sequence" .= msgSequence
     , "order_id" .= msgOrderId
     , "side" .= msgSide
+    , "price" .= msgPrice
     , "new_size" .= msgNewSize
     , "old_size" .= msgOldSize
-    , "price" .= msgPrice
-    ] ++
-    optionalField "user_id" msgUserId ++ optionalField "profile_id" msgProfileId
+    ]
   toJSON ChangeMarket {..} =
     object $
     [ "type" .= ("change" :: Text)
@@ -370,66 +416,52 @@ instance ToJSON ExchangeMessage where
     , "side" .= msgSide
     , "new_funds" .= msgNewFunds
     , "old_funds" .= msgOldFunds
-    ] ++
-    optionalField "user_id" msgUserId ++ optionalField "profile_id" msgProfileId
-  toJSON ReceivedLimit {..} =
-    object $
-    [ "type" .= ("received" :: Text)
-    , "time" .= msgTime
-    , "product_id" .= msgProductId
-    , "sequence" .= msgSequence
-    , "order_id" .= msgOrderId
-    , "side" .= msgSide
-    , "size" .= msgSize
-    , "price" .= msgPrice
-    , "order_type" .= Limit
-    ] ++
-    optionalField "client_id" msgClientOid ++
-    optionalField "user_id" msgUserId ++ optionalField "profile_id" msgProfileId
-  toJSON ReceivedMarket {..} =
-    object $
-    [ "type" .= ("received" :: Text)
-    , "time" .= msgTime
-    , "product_id" .= msgProductId
-    , "sequence" .= msgSequence
-    , "order_id" .= msgOrderId
-    , "side" .= msgSide
-    , "order_type" .= Market
-    ] ++
-    size ++
-    funds ++
-    optionalField "client_id" msgClientOid ++
-    optionalField "user_id" msgUserId ++ optionalField "profile_id" msgProfileId
-    where
-      (size, funds) =
-        case msgMarketBounds of
-          Left s -> (["size" .= s], [])
-          Right (ms, f) ->
-            case ms of
-              Nothing -> ([], ["funds" .= f])
-              Just s' -> (["size" .= s'], ["funds" .= f])
+    ]
   toJSON Activate {..} =
     object $
     [ "type" .= ("activate" :: Text)
     , "time" .= msgTime
     , "product_id" .= msgProductId
+    , "timestamp" .= msgTimestamp
     , "order_id" .= msgOrderId
     , "side" .= msgSide
     , "stop_type" .= msgStopType
     , "stop_price" .= msgStopPrice
+    , "size" .= msgSize
     , "funds" .= msgFunds
     , "taker_fee_rate" .= msgTakerFeeRate
     ] ++
-    optionalField "limit_price" msgMaybeLimitPrice ++
-    optionalField "user_id" msgUserId ++ optionalField "profile_id" msgProfileId
-  toJSON Heartbeat {..} =
+    optionalField "private" msgMaybePrivate
+  toJSON Ticker {..} =
     object $
-    [ "time" .= msgTime
-    , "product_id" .= msgProductId
+    [ "type" .= ("ticker" :: Text)
+    , "trade_id" .= msgTradeId
     , "sequence" .= msgSequence
-    , "last_trade_id" .= msgLastTradeId
+    , "time" .= msgTime
+    , "product_id" .= msgProductId
+    , "price" .= msgPrice
+    , "side" .= msgSide
+    , "last_size" .= msgLastSize
+    , "best_bid" .= msgBestBid
+    , "best_ask" .= msgBestAsk
     ]
+  toJSON Snapshot {..} =
+    object $
+    [ "type" .= ("snapshot" :: Text)
+    , "product_id" .= msgProductId
+    , "bids" .= msgBids
+    , "asks" .= msgAsks
+    ]
+  toJSON L2Update {..} =
+    object $
+    [ "type" .= ("l2update" :: Text)
+    , "product_id" .= msgProductId
+    , "changes" .= msgChanges
+    ]
+  toJSON Error {..} =
+    object ["type" .= ("error" :: Text), "message" .= msgMessage]
 
+-------------------------------------------------------------------------------
 optionalField :: (ToJSON v) => Text -> Maybe v -> [Pair]
 optionalField key maybeValue =
   case maybeValue of

@@ -11,31 +11,28 @@ import           Test.Tasty
 
 import           Coinbase.Exchange.Types
 import           Coinbase.Exchange.Types.Core
+import           Coinbase.Exchange.Types.Socket
 
 import qualified Coinbase.Exchange.MarketData.Test as MarketData
 import qualified Coinbase.Exchange.Private.Test    as Private
 import qualified Coinbase.Exchange.Socket.Test     as Socket
 
+-- Use sandbox for testing (except socket which is read only)
 main :: IO ()
 main = do
-        mgr     <- newManager tlsManagerSettings
-        tKey    <- liftM CBS.pack $ getEnv "GDAX_KEY"
-        tSecret <- liftM CBS.pack $ getEnv "GDAX_SECRET"
-        tPass   <- liftM CBS.pack $ getEnv "GDAX_PASSPHRASE"
-
-        sbox    <- getEnv "GDAX_SANDBOX"
-        let apiType  = case sbox of
-                        "FALSE" -> Live
-                        "TRUE"  -> Sandbox
-                        _       -> error "Coinbase sandbox option must be either: TRUE or FALSE (all caps)"
-
-        case mkToken tKey tSecret tPass of
-            Right tok -> defaultMain (tests $ ExchangeConf mgr (Just tok) apiType)
-            Left   er -> error $ show er
+  mgr <- newManager tlsManagerSettings
+  tKey <- liftM CBS.pack $ getEnv "GDAX_SANDBOX_KEY"
+  tSecret <- liftM CBS.pack $ getEnv "GDAX_SANDBOX_SECRET"
+  tPass <- liftM CBS.pack $ getEnv "GDAX_SANDBOX_PASSPHRASE"
+  case mkToken tKey tSecret tPass of
+    Right tok -> defaultMain (tests $ ExchangeConf mgr (Just tok) Sandbox)
+    Left er   -> error $ show er
 
 tests :: ExchangeConf -> TestTree
-tests conf = testGroup "Tests"
-        [ MarketData.tests conf
-        , Private.tests    conf
-        , Socket.tests conf (ProductId "ETH-BTC") 
-        ]
+tests conf =
+  testGroup
+    "Tests"
+    [ MarketData.tests conf
+    , Private.tests conf
+    , Socket.tests Nothing [ProductId "ETH-BTC"] [Full] -- set conf = Nothing for unauthenticated live feeds
+    ]

@@ -4,13 +4,12 @@ module Coinbase.Exchange.MarketData.Test
   ( tests
   ) where
 
-import           Control.Monad.IO.Class
+import           Control.Exception
 import           Data.Time
 import           Test.Tasty
 import           Test.Tasty.HUnit
 
 import           Coinbase.Exchange.MarketData
-import           Coinbase.Exchange.Rest
 import           Coinbase.Exchange.Types
 import           Coinbase.Exchange.Types.Core
 
@@ -61,7 +60,7 @@ defEnd =
 case_parse :: Show a => ExchangeConf -> String -> Exchange a -> TestTree
 case_parse conf l fn =
   testCase l $ do
-    v <- liftIO $ runExchange conf fn
+    v <- (try :: IO a -> IO (Either SomeException a)) $ runExchange conf fn
     assertBool
       ("Failed to parse: " ++ show v)
       (case v of

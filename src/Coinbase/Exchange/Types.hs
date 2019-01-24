@@ -1,4 +1,3 @@
-{-# LANGUAGE DeriveAnyClass             #-}
 {-# LANGUAGE DeriveDataTypeable         #-}
 {-# LANGUAGE DeriveFunctor              #-}
 {-# LANGUAGE DeriveGeneric              #-}
@@ -33,8 +32,6 @@ module Coinbase.Exchange.Types
   , ExchangeT
   , runExchange
   , runExchangeT
-  , runExchange
-  , runExchangeT
   , getManager
   ) where
 
@@ -42,7 +39,7 @@ import           Control.Monad.Catch
 import           Control.Monad.Except
 import           Control.Monad.Reader
 import           Data.Aeson.Types
-import           Data.ByteString
+import           Data.ByteString        (ByteString)
 import qualified Data.ByteString.Base64 as Base64
 import           Data.Data
 import           Data.Text              (Text)
@@ -83,7 +80,13 @@ type Passphrase = ByteString
 data Pagination = Pagination
   { before :: Maybe String
   , after  :: Maybe String
-  } deriving (Eq, Show, Generic, FromJSON, ToJSON)
+  } deriving (Eq, Show, Generic)
+
+instance ToJSON Pagination where
+  toJSON = genericToJSON defaultOptions
+
+instance FromJSON Pagination where
+  parseJSON = genericParseJSON defaultOptions
 
 nullPagination :: Pagination
 nullPagination = Pagination {before = Nothing, after = Nothing}

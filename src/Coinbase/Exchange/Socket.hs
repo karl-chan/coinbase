@@ -3,7 +3,7 @@
 module Coinbase.Exchange.Socket
   ( mkAuth
   , subscribe
-  , module Coinbase.Exchange.Types.Socket
+  , setHeartbeat
   ) where
 
 -------------------------------------------------------------------------------
@@ -52,18 +52,17 @@ mkAuth conf = do
 
 -------------------------------------------------------------------------------
 subscribe ::
-     ExchangeConf
+     Maybe ExchangeConf
   -> ApiType
   -> [ProductId]
   -> [Channel]
   -> WS.ClientApp a
   -> IO a
-subscribe conf atype pids channels app =
+subscribe maybeConf atype pids channels app =
   withSocketsDo $ do
-    auth <- mkAuth conf
-    print auth
+    maybeAuth <- mapM mkAuth maybeConf
     runSecureClient location 443 "/" $ \conn -> do
-      WS.sendTextData conn $ encode (Subscribe auth pids channels)
+      WS.sendTextData conn $ encode (Subscribe maybeAuth pids channels)
       app conn
   where
     location =

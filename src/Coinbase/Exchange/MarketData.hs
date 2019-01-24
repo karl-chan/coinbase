@@ -18,7 +18,6 @@ module Coinbase.Exchange.MarketData
   , module Coinbase.Exchange.Types.MarketData
   ) where
 
-import           Control.Monad.Except
 import           Control.Monad.Reader
 import           Control.Monad.Trans.Resource
 import           Data.List

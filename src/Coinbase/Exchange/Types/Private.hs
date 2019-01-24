@@ -6,22 +6,18 @@
 
 module Coinbase.Exchange.Types.Private where
 
-import           Control.Applicative
 import           Control.DeepSeq
 import           Control.Monad
-import           Data.Aeson.Casing
 import           Data.Aeson.Types
 import           Data.Char
 import           Data.Data
 import           Data.Hashable
 import           Data.Text                    (Text)
-import qualified Data.Text                    as T
 import           Data.Time
 import           Data.UUID
 import           Data.Word
 import           GHC.Generics
 
-import           Coinbase.Exchange.Types
 import           Coinbase.Exchange.Types.Core hiding (Entry)
 
 -- Accounts
@@ -280,7 +276,7 @@ instance ToJSON NewOrder where
        , "time_in_force" .= noTimeInForce
        , "post_only" .= noPostOnly
        ] ++
-       clientID ++ cancelAfter ++ stopPrice)
+       clientID ++ cancelAfter ++ stopPriceInfo)
     where
       clientID =
         case noClientOid of
@@ -290,7 +286,7 @@ instance ToJSON NewOrder where
         case noCancelAfter of
           Just time -> ["cancel_after" .= time]
           Nothing   -> []
-      stopPrice =
+      stopPriceInfo =
         case noStopPrice of
           Just (stop, stopPrice) -> ["stop" .= stop, "stop_price" .= stopPrice]
           Nothing -> []
@@ -301,7 +297,7 @@ instance ToJSON NewOrder where
        , "side" .= noSide
        , "stp" .= noSelfTrade
        ] ++
-       clientID ++ size ++ funds ++ stopPrice)
+       clientID ++ size ++ funds ++ stopPriceInfo)
     where
       clientID =
         case noClientOid of
@@ -314,7 +310,7 @@ instance ToJSON NewOrder where
             case ms of
               Nothing -> ([], ["funds" .= f])
               Just s' -> (["size" .= s'], ["funds" .= f])
-      stopPrice =
+      stopPriceInfo =
         case noStopPrice of
           Just (stop, stopPrice) -> ["stop" .= stop, "stop_price" .= stopPrice]
           Nothing -> []

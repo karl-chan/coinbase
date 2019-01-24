@@ -78,8 +78,8 @@ cancelAllOrders ::
   -> m [OrderId]
 cancelAllOrders prodId = coinbaseDelete True ("/orders" ++ opt prodId) voidBody
   where
-    opt Nothing   = ""
-    opt (Just id) = "?product_id=" ++ T.unpack (unProductId id)
+    opt Nothing    = ""
+    opt (Just pid) = "?product_id=" ++ T.unpack (unProductId pid)
 
 getOrderList ::
      (MonadResource m, MonadReader ExchangeConf m, MonadThrow m)
