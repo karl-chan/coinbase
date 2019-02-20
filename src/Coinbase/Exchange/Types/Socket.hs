@@ -37,7 +37,7 @@ instance ToJSON Auth where
 
 -------------------------------------------------------------------------------
 data Channel
-  = Ticket
+  = Ticker
   | Level2
   | User
   | Matches
@@ -147,15 +147,15 @@ data ExchangeMessage
              , msgFunds        :: Cost
              , msgTakerFeeRate :: CoinScientific
              , msgMaybePrivate :: Maybe Bool }
-  | Ticker { msgTradeId   :: TradeId
-           , msgSequence  :: Sequence
-           , msgTime      :: UTCTime
-           , msgProductId :: ProductId
-           , msgPrice     :: Price
-           , msgSide      :: Side
-           , msgLastSize  :: Size
-           , msgBestBid   :: Price
-           , msgBestAsk   :: Price }
+  | TickerMsg { msgTradeId   :: TradeId
+              , msgSequence  :: Sequence
+              , msgTime      :: UTCTime
+              , msgProductId :: ProductId
+              , msgPrice     :: Price
+              , msgSide      :: Side
+              , msgLastSize  :: Size
+              , msgBestBid   :: Price
+              , msgBestAsk   :: Price }
   | Snapshot { msgProductId :: ProductId
              , msgBids      :: [(Price, Size)]
              , msgAsks      :: [(Price, Size)] }
@@ -264,7 +264,7 @@ instance FromJSON ExchangeMessage where
         m .: "taker_fee_rate" <*>
         m .:? "private"
       "ticker" ->
-        Ticker <$> m .: "trade_id" <*> m .: "sequence" <*> m .: "time" <*>
+        TickerMsg <$> m .: "trade_id" <*> m .: "sequence" <*> m .: "time" <*>
         m .: "product_id" <*>
         m .: "price" <*>
         m .: "side" <*>
@@ -432,7 +432,7 @@ instance ToJSON ExchangeMessage where
     , "taker_fee_rate" .= msgTakerFeeRate
     ] ++
     optionalField "private" msgMaybePrivate
-  toJSON Ticker {..} =
+  toJSON TickerMsg {..} =
     object $
     [ "type" .= ("ticker" :: Text)
     , "trade_id" .= msgTradeId
